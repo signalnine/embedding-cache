@@ -154,3 +154,46 @@ def test_cache_input_validation():
         # Should reject list with non-string
         with pytest.raises(TypeError):
             cache.embed(["hello", 123])
+
+
+def test_remote_fallback_on_local_failure():
+    """Test that remote provider is used when local provider fails."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create cache with remote URL configured
+        cache = EmbeddingCache(
+            cache_dir=tmpdir,
+            remote_url="https://example.com",
+            fallback_providers=["local", "remote"]
+        )
+
+        # Set local provider to fail
+        cache.local_provider.is_available = Mock(return_value=False)
+
+        # Mock remote provider to succeed
+        test_embedding = np.array([0.1, 0.2, 0.3], dtype=np.float32)
+        cache.remote_provider.embed = Mock(return_value=test_embedding)
+
+        # Should fall back to remote
+        result = cache.embed("hello")
+
+        # Verify remote was used
+        assert cache.remote_provider.embed.call_count == 1
+        np.testing.assert_array_equal(result, test_embedding)
+
+        # Verify stats tracked remote usage
+        assert cache.stats["remote_hits"] == 1
+        assert cache.stats["misses"] == 1
+
+
+def test_all_providers_fail():
+    """Test that RuntimeError is raised when all providers fail."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create cache without remote URL
+        cache = EmbeddingCache(cache_dir=tmpdir, remote_url=None)
+
+        # Make local provider unavailable
+        cache.local_provider.is_available = Mock(return_value=False)
+
+        # Should raise RuntimeError with helpful message
+        with pytest.raises(RuntimeError, match="All embedding providers failed"):
+            cache.embed("hello")

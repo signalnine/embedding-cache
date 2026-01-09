@@ -2,6 +2,7 @@
 
 import os
 import logging
+import threading
 from pathlib import Path
 from typing import Union, List, Optional
 
@@ -16,20 +17,27 @@ logger = logging.getLogger(__name__)
 
 
 class EmbeddingCache:
-    """Main cache class that ties together normalization, storage, and providers."""
+    """Main cache class that ties together normalization, storage, and providers.
+
+    Note: Stats tracking is thread-safe. The underlying storage layer is also thread-safe.
+    """
 
     def __init__(
         self,
         cache_dir: Optional[str] = None,
         model: str = "nomic-ai/nomic-embed-text-v1.5",
-        remote_url: Optional[str] = None
+        remote_url: Optional[str] = None,
+        fallback_providers: Optional[List[str]] = None,
+        timeout: float = 5.0
     ):
         """Initialize EmbeddingCache.
 
         Args:
-            cache_dir: Cache directory path (defaults to ~/.cache/embedding-cache or EMBEDDING_CACHE_DIR)
+            cache_dir: Cache directory path (defaults to EMBEDDING_CACHE_DIR env var or ~/.cache/embedding-cache)
             model: Model name for embeddings
             remote_url: Optional remote backend URL
+            fallback_providers: Provider fallback order (default: ["local", "remote"] if remote_url else ["local"])
+            timeout: Remote request timeout in seconds
         """
         # Set up cache directory
         if cache_dir is None:
@@ -46,15 +54,15 @@ class EmbeddingCache:
 
         # Initialize providers
         self.local_provider = LocalProvider(model=model)
-        self.remote_provider = RemoteProvider(remote_url, model=model) if remote_url else None
+        self.remote_provider = RemoteProvider(remote_url, timeout=timeout, model=model) if remote_url else None
 
         # Set up fallback chain
-        if remote_url:
-            self.fallback_providers = ["local", "remote"]
-        else:
-            self.fallback_providers = ["local"]
+        if fallback_providers is None:
+            fallback_providers = ["local", "remote"] if remote_url else ["local"]
+        self.fallback_providers = fallback_providers
 
-        # Initialize stats
+        # Initialize stats with thread-safe lock
+        self._stats_lock = threading.Lock()
         self.stats = {
             "hits": 0,
             "misses": 0,
@@ -104,11 +112,13 @@ class EmbeddingCache:
         # Check cache
         cached = self.storage.get(cache_key)
         if cached is not None:
-            self.stats["hits"] += 1
+            with self._stats_lock:
+                self.stats["hits"] += 1
             return cached
 
         # Cache miss - compute embedding
-        self.stats["misses"] += 1
+        with self._stats_lock:
+            self.stats["misses"] += 1
         embedding = self._compute_embedding(normalized)
 
         # Store in cache
@@ -141,8 +151,10 @@ class EmbeddingCache:
                 elif provider_name == "remote":
                     if self.remote_provider is not None:
                         logger.debug("Using remote provider")
-                        self.stats["remote_hits"] += 1
-                        return self.remote_provider.embed(text)
+                        embedding = self.remote_provider.embed(text)
+                        with self._stats_lock:
+                            self.stats["remote_hits"] += 1
+                        return embedding
                     else:
                         logger.warning("Remote provider not configured")
                         continue

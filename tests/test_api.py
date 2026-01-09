@@ -1,5 +1,6 @@
 """Tests for public API."""
 
+import os
 import pytest
 import numpy as np
 import tempfile
@@ -22,30 +23,55 @@ def test_embed_class_exists():
 def test_embed_function_simple_usage():
     """Test that embed() function works with simple function call."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Mock the provider to avoid requiring sentence-transformers
-        test_embedding = np.array([0.1, 0.2, 0.3], dtype=np.float32)
+        # Reset singleton for this test
+        import embedding_cache
+        embedding_cache._default_cache = None
 
-        with patch('embedding_cache.cache.EmbeddingCache.__init__', return_value=None) as mock_init:
-            with patch('embedding_cache.cache.EmbeddingCache.embed', return_value=test_embedding) as mock_embed:
-                # Need to mock the global singleton creation
-                import embedding_cache
-                embedding_cache._default_cache = None
+        # Patch env var to use temp directory
+        with patch.dict('os.environ', {'EMBEDDING_CACHE_DIR': tmpdir}):
+            # Create a mock cache instance with proper behavior
+            mock_cache = Mock()
+            test_embedding = np.array([0.1, 0.2, 0.3], dtype=np.float32)
+            mock_cache.embed.return_value = test_embedding
 
-                # Patch EmbeddingCache to return a mock instance
-                mock_cache_instance = Mock()
-                mock_cache_instance.embed = Mock(return_value=test_embedding)
+            # Patch EmbeddingCache constructor to return our mock
+            with patch('embedding_cache.EmbeddingCache', return_value=mock_cache):
+                # Call embed function
+                result = embed("Hello world")
 
-                with patch('embedding_cache.EmbeddingCache') as MockCache:
-                    MockCache.return_value = mock_cache_instance
+                # Should return the embedding
+                np.testing.assert_array_equal(result, test_embedding)
 
-                    # Call embed function
-                    result = embed("Hello world")
+                # Should have called embed on the singleton instance
+                mock_cache.embed.assert_called_once_with("Hello world")
 
-                    # Should have created singleton
-                    MockCache.assert_called_once()
 
-                    # Should have called embed on the instance
-                    mock_cache_instance.embed.assert_called_once_with("Hello world")
+def test_embed_singleton_persistence():
+    """Test that embed() reuses the same singleton across multiple calls."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Reset singleton for this test
+        import embedding_cache
+        embedding_cache._default_cache = None
 
-                    # Should return the embedding
-                    np.testing.assert_array_equal(result, test_embedding)
+        # Patch env var to use temp directory
+        with patch.dict('os.environ', {'EMBEDDING_CACHE_DIR': tmpdir}):
+            # Create a mock cache instance
+            mock_cache = Mock()
+            test_embedding = np.array([0.1, 0.2, 0.3], dtype=np.float32)
+            mock_cache.embed.return_value = test_embedding
+
+            # Patch EmbeddingCache constructor to return our mock
+            with patch('embedding_cache.EmbeddingCache', return_value=mock_cache) as MockCache:
+                # Call embed function multiple times
+                result1 = embed("first")
+                result2 = embed("second")
+                result3 = embed("third")
+
+                # Constructor should only be called once (singleton created once)
+                MockCache.assert_called_once()
+
+                # embed should be called 3 times on the same instance
+                assert mock_cache.embed.call_count == 3
+                mock_cache.embed.assert_any_call("first")
+                mock_cache.embed.assert_any_call("second")
+                mock_cache.embed.assert_any_call("third")

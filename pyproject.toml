@@ -20,8 +20,9 @@ dependencies = [
 
 [project.optional-dependencies]
 local = [
-    "sentence-transformers>=2.2",
+    "sentence-transformers>=2.3",
     "torch>=2.0",
+    "einops>=0.8",  # Required by nomic-embed models
 ]
 dev = [
     "pytest>=7.0",

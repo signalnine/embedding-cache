@@ -40,7 +40,10 @@ class LocalProvider:
 
         from sentence_transformers import SentenceTransformer
         logger.info(f"Loading model {self.model_name}...")
-        self._model = SentenceTransformer(self.model_name)
+        self._model = SentenceTransformer(
+            self.model_name,
+            trust_remote_code=True  # Required for nomic-embed models
+        )
         logger.info(f"Model {self.model_name} loaded successfully")
 
     def embed(self, text: str) -> np.ndarray:

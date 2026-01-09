@@ -8,7 +8,7 @@ A Python client library that caches embedding vectors locally with smart fallbac
 
 🔄 **Smart fallback chain: local model → remote backend** - Automatically falls back to remote if local fails
 
-💰 **Zero API costs using nomic-embed-text-v2** - Run embeddings locally with open-source models
+💰 **Zero API costs using nomic-embed-text-v1.5** - Run embeddings locally with open-source models
 
 📊 **Cache statistics tracking hits/misses** - Monitor cache performance and efficiency
 
@@ -100,7 +100,7 @@ print(cache.stats)
 
 By default, embeddings are cached in:
 - Linux/macOS: `~/.cache/embedding-cache/`
-- Windows: `%LOCALAPPDATA%\embedding-cache\`
+- Windows: `C:\Users\<username>\.cache\embedding-cache\`
 
 Override with `EMBEDDING_CACHE_DIR` environment variable or the `cache_dir` parameter.
 
@@ -172,7 +172,7 @@ pytest tests/ --cov=embedding_cache --cov-report=html
 Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/embedding-cache.git
+git clone https://github.com/signalnine/embedding-cache.git
 cd embedding-cache
 ```
 
@@ -192,7 +192,9 @@ Run tests with coverage:
 
 ```bash
 pytest --cov=embedding_cache --cov-report=html
-open htmlcov/index.html
+open htmlcov/index.html  # macOS
+# or: xdg-open htmlcov/index.html  # Linux
+# or: start htmlcov/index.html     # Windows
 ```
 
 ## Error Handling

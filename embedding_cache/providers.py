@@ -3,6 +3,7 @@
 import numpy as np
 from typing import List, Optional
 import logging
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -71,3 +72,74 @@ class LocalProvider:
         self._load_model()
         embeddings = self._model.encode(texts, convert_to_numpy=True)
         return [emb.astype(np.float32) for emb in embeddings]
+
+
+class RemoteProvider:
+    """Remote embedding provider via HTTP backend."""
+
+    def __init__(self, backend_url: str, timeout: float = 5.0, model: str = "nomic-embed-text-v2"):
+        """Initialize remote provider.
+
+        Args:
+            backend_url: Backend service URL
+            timeout: Request timeout in seconds
+            model: Model name to request
+        """
+        self.backend_url = backend_url.rstrip('/')
+        self.timeout = timeout
+        self.model = model
+
+    def _call_backend(self, texts: List[str]) -> List[np.ndarray]:
+        """Call backend API with texts.
+
+        Args:
+            texts: List of texts to embed
+
+        Returns:
+            List of embeddings
+        """
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(
+                    f"{self.backend_url}/embed",
+                    json={
+                        "texts": texts,
+                        "model": self.model,
+                        "normalized": True
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                embeddings = [np.array(emb, dtype=np.float32) for emb in data["embeddings"]]
+                return embeddings
+
+        except httpx.TimeoutException as e:
+            raise RuntimeError(f"Remote backend timeout: {e}")
+        except httpx.NetworkError as e:
+            raise RuntimeError(f"Remote backend error: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Remote backend failed: {e}")
+
+    def embed(self, text: str) -> np.ndarray:
+        """Embed a single text string.
+
+        Args:
+            text: Input text
+
+        Returns:
+            Embedding vector
+        """
+        embeddings = self._call_backend([text])
+        return embeddings[0]
+
+    def embed_batch(self, texts: List[str]) -> List[np.ndarray]:
+        """Embed multiple text strings.
+
+        Args:
+            texts: List of input texts
+
+        Returns:
+            List of embedding vectors
+        """
+        return self._call_backend(texts)

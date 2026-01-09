@@ -2,7 +2,9 @@
 
 import numpy as np
 import pytest
-from embedding_cache.providers import LocalProvider
+from embedding_cache.providers import LocalProvider, RemoteProvider
+from unittest.mock import Mock, patch
+import httpx
 
 
 def test_local_provider_unavailable():
@@ -40,3 +42,77 @@ def test_local_provider_embed_batch():
     assert len(embeddings) == 2
     assert all(isinstance(e, np.ndarray) for e in embeddings)
     assert all(e.shape == (768,) for e in embeddings)
+
+
+def test_remote_provider_embed_single():
+    """Should send single text to backend and return embedding."""
+    mock_response = Mock()
+    mock_response.json.return_value = {
+        "embeddings": [[0.1, 0.2, 0.3]],
+        "cache_hits": [False],
+        "model": "nomic-embed-text-v2",
+        "dimensions": 3
+    }
+
+    mock_client = Mock()
+    mock_client.post.return_value = mock_response
+    mock_client.__enter__ = Mock(return_value=mock_client)
+    mock_client.__exit__ = Mock(return_value=False)
+
+    with patch('httpx.Client', return_value=mock_client):
+        provider = RemoteProvider(backend_url="http://test.com", timeout=5.0)
+        embedding = provider.embed("hello")
+
+    assert isinstance(embedding, np.ndarray)
+    assert embedding.shape == (3,)
+    np.testing.assert_array_almost_equal(embedding, [0.1, 0.2, 0.3])
+
+
+def test_remote_provider_embed_batch():
+    """Should send multiple texts to backend and return embeddings."""
+    mock_response = Mock()
+    mock_response.json.return_value = {
+        "embeddings": [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]],
+        "cache_hits": [False, True],
+        "model": "nomic-embed-text-v2",
+        "dimensions": 3
+    }
+
+    mock_client = Mock()
+    mock_client.post.return_value = mock_response
+    mock_client.__enter__ = Mock(return_value=mock_client)
+    mock_client.__exit__ = Mock(return_value=False)
+
+    with patch('httpx.Client', return_value=mock_client):
+        provider = RemoteProvider(backend_url="http://test.com", timeout=5.0)
+        embeddings = provider.embed_batch(["hello", "world"])
+
+    assert len(embeddings) == 2
+    np.testing.assert_array_almost_equal(embeddings[0], [0.1, 0.2, 0.3])
+    np.testing.assert_array_almost_equal(embeddings[1], [0.4, 0.5, 0.6])
+
+
+def test_remote_provider_timeout():
+    """Should raise error on timeout."""
+    mock_client = Mock()
+    mock_client.post.side_effect = httpx.TimeoutException("Timeout")
+    mock_client.__enter__ = Mock(return_value=mock_client)
+    mock_client.__exit__ = Mock(return_value=False)
+
+    with patch('httpx.Client', return_value=mock_client):
+        provider = RemoteProvider(backend_url="http://test.com", timeout=0.1)
+        with pytest.raises(RuntimeError, match="Remote backend timeout"):
+            provider.embed("hello")
+
+
+def test_remote_provider_network_error():
+    """Should raise error on network failure."""
+    mock_client = Mock()
+    mock_client.post.side_effect = httpx.NetworkError("Network error")
+    mock_client.__enter__ = Mock(return_value=mock_client)
+    mock_client.__exit__ = Mock(return_value=False)
+
+    with patch('httpx.Client', return_value=mock_client):
+        provider = RemoteProvider(backend_url="http://test.com", timeout=5.0)
+        with pytest.raises(RuntimeError, match="Remote backend error"):
+            provider.embed("hello")

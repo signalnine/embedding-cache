@@ -1,12 +1,13 @@
 """Utility functions for caching."""
 
 import hashlib
+import json
 
 
 def generate_cache_key(text: str, model: str) -> str:
     """Generate a cache key from text and model name.
 
-    Uses SHA-256 hash of the concatenated text and model.
+    Uses SHA-256 hash of JSON-encoded text and model to prevent collisions.
 
     Args:
         text: Normalized text
@@ -15,5 +16,5 @@ def generate_cache_key(text: str, model: str) -> str:
     Returns:
         Hex string of SHA-256 hash
     """
-    combined = f"{text}::{model}"
+    combined = json.dumps({"text": text, "model": model}, sort_keys=True)
     return hashlib.sha256(combined.encode('utf-8')).hexdigest()

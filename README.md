@@ -14,6 +14,39 @@ A Python client library that caches embedding vectors locally with smart fallbac
 
 🎯 **Simple API with advanced options for power users** - Start simple, scale to complex use cases
 
+## Why embedding-cache?
+
+### vs RedisVL / Remote Caches
+- **No Redis setup required** - Just SQLite, no external dependencies
+- **Works offline** - Local model runs without internet
+- **Zero network latency** - Cache lookups are disk reads, not network calls
+- **Computes embeddings** - Built-in model support, not just caching
+
+### vs GPTCache / Semantic Caches
+- **Exact matching** - Deterministic cache keys, no similarity search needed
+- **Simpler setup** - Single SQLite file vs vector stores + embedding + eviction
+- **Text normalization** - "Hello" and "hello" share the same cache entry
+- **Embedding-focused** - Designed for vectors, not LLM response caching
+
+### vs Generic Caches (diskcache, cachew)
+- **Embedding-aware** - Automatic normalization and provider fallback
+- **Stats tracking** - Built-in monitoring for cache hits/misses
+- **Smart fallback** - Local model → remote backend → error
+- **Zero config** - Works out of the box with sensible defaults
+
+### When to use embedding-cache
+✅ Prototyping with embeddings locally
+✅ Reducing API costs for embedding computation
+✅ Offline or air-gapped environments
+✅ Projects that need fallback to remote compute
+✅ Simple single-file cache without infrastructure
+
+### When to use alternatives
+- Need semantic similarity matching → **GPTCache**
+- Already have Redis infrastructure → **RedisVL**
+- Caching non-embedding data → **diskcache**
+- Need distributed caching → **Redis/Memcached**
+
 ## Installation
 
 Basic installation:

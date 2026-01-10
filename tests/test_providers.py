@@ -151,3 +151,57 @@ def test_openai_provider_no_api_key():
         result = provider.is_available()
         # Verify it returns False when API key is not set
         assert result is False
+
+
+def test_openai_provider_embed_single():
+    """Should embed single text via OpenAI API."""
+    from embedding_cache.providers import OpenAIProvider
+
+    # Mock OpenAI client
+    mock_client = Mock()
+    mock_response = Mock()
+    mock_response.data = [Mock(embedding=[0.1] * 1536)]  # OpenAI returns 1536 dims
+    mock_client.embeddings.create.return_value = mock_response
+
+    provider = OpenAIProvider(model="text-embedding-3-small", api_key="test-key")
+
+    with patch('embedding_cache.providers.OpenAIProvider._load_client'):
+        provider._client = mock_client
+        embedding = provider.embed("hello world")
+
+    assert isinstance(embedding, np.ndarray)
+    assert embedding.shape == (1536,)
+    assert embedding.dtype == np.float32
+    mock_client.embeddings.create.assert_called_once_with(
+        input=["hello world"],
+        model="text-embedding-3-small"
+    )
+
+
+def test_openai_provider_embed_batch():
+    """Should embed multiple texts via OpenAI API."""
+    from embedding_cache.providers import OpenAIProvider
+
+    # Mock OpenAI client
+    mock_client = Mock()
+    mock_response = Mock()
+    mock_response.data = [
+        Mock(embedding=[0.1] * 1536),
+        Mock(embedding=[0.2] * 1536),
+    ]
+    mock_client.embeddings.create.return_value = mock_response
+
+    provider = OpenAIProvider(model="text-embedding-3-small", api_key="test-key")
+
+    with patch('embedding_cache.providers.OpenAIProvider._load_client'):
+        provider._client = mock_client
+        embeddings = provider.embed_batch(["hello", "world"])
+
+    assert isinstance(embeddings, list)
+    assert len(embeddings) == 2
+    assert all(isinstance(e, np.ndarray) for e in embeddings)
+    assert all(e.shape == (1536,) for e in embeddings)
+    mock_client.embeddings.create.assert_called_once_with(
+        input=["hello", "world"],
+        model="text-embedding-3-small"
+    )

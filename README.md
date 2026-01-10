@@ -112,6 +112,33 @@ The OpenAI provider:
 - Supports batch embedding (up to 2048 texts per request)
 - Returns 1536-dimensional embeddings for text-embedding-3-small
 
+## Model Comparison
+
+embedding-cache supports multiple embedding models. Here's how they compare:
+
+| Model | Dimensions | Provider | Cost | Speed | Use Case |
+|-------|-----------|----------|------|-------|----------|
+| nomic-ai/nomic-embed-text-v1.5 | 768 | Local | $0 | Fast (cached) | General purpose, offline |
+| nomic-ai/nomic-embed-text-v2-moe | 768 | Local | $0 | Medium (MoE) | Higher quality, offline |
+| openai:text-embedding-3-small | 1536 | API | $0.0001/1K tokens | Fast (API) | Highest quality, online |
+
+### Switching Models
+
+```python
+from embedding_cache import EmbeddingCache
+
+# Use v1.5 (default, fast and reliable)
+cache_v15 = EmbeddingCache(model="nomic-ai/nomic-embed-text-v1.5")
+
+# Use v2-moe (newer, potentially higher quality)
+cache_v2 = EmbeddingCache(model="nomic-ai/nomic-embed-text-v2-moe")
+
+# Use OpenAI (highest quality, requires API key)
+cache_openai = EmbeddingCache(model="openai:text-embedding-3-small")
+```
+
+All models benefit from the same caching layer, so repeated queries are instant regardless of which model you choose.
+
 ## Quick Start
 
 ### Simple Function API

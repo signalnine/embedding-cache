@@ -156,7 +156,7 @@ class OpenAIProvider:
             model: OpenAI model name
             api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
         """
-        self.model = model
+        self.model_name = model
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self._client: Optional[object] = None
 
@@ -176,12 +176,12 @@ class OpenAIProvider:
         if not self.is_available():
             raise RuntimeError(
                 "OpenAI not available. "
-                "Install with: pip install openai, "
+                "Install with: pip install embedding-cache[openai] "
                 "and set OPENAI_API_KEY environment variable"
             )
 
         from openai import OpenAI
-        logger.info(f"Initializing OpenAI client with model {self.model}...")
+        logger.info(f"Initializing OpenAI client with model {self.model_name}...")
         self._client = OpenAI(api_key=self.api_key)
         logger.info(f"OpenAI client initialized successfully")
 
@@ -197,7 +197,7 @@ class OpenAIProvider:
         self._load_client()
         response = self._client.embeddings.create(
             input=[text],
-            model=self.model
+            model=self.model_name
         )
         embedding = np.array(response.data[0].embedding, dtype=np.float32)
         return embedding
@@ -214,7 +214,7 @@ class OpenAIProvider:
         self._load_client()
         response = self._client.embeddings.create(
             input=texts,
-            model=self.model
+            model=self.model_name
         )
         embeddings = [np.array(item.embedding, dtype=np.float32) for item in response.data]
         return embeddings

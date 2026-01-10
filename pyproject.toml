@@ -22,7 +22,10 @@ dependencies = [
 local = [
     "sentence-transformers>=2.3",
     "torch>=2.0",
-    "einops>=0.8",  # Required by nomic-embed models
+    "einops>=0.8",
+]
+openai = [
+    "openai>=1.0.0",
 ]
 dev = [
     "pytest>=7.0",

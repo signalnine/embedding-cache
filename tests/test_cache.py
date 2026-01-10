@@ -197,3 +197,25 @@ def test_all_providers_fail():
         # Should raise RuntimeError with helpful message
         with pytest.raises(RuntimeError, match="All embedding providers failed"):
             cache.embed("hello")
+
+
+def test_cache_selects_openai_provider():
+    """Should select OpenAIProvider when model starts with 'openai:'."""
+    from embedding_cache import EmbeddingCache
+    from embedding_cache.providers import OpenAIProvider
+
+    cache = EmbeddingCache(model="openai:text-embedding-3-small")
+
+    assert isinstance(cache.local_provider, OpenAIProvider)
+    assert cache.local_provider.model_name == "text-embedding-3-small"
+
+
+def test_cache_selects_local_provider_for_nomic():
+    """Should select LocalProvider for nomic models."""
+    from embedding_cache import EmbeddingCache
+    from embedding_cache.providers import LocalProvider
+
+    cache = EmbeddingCache(model="nomic-ai/nomic-embed-text-v1.5")
+
+    assert isinstance(cache.local_provider, LocalProvider)
+    assert cache.local_provider.model_name == "nomic-ai/nomic-embed-text-v1.5"

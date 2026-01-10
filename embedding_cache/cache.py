@@ -11,7 +11,7 @@ import numpy as np
 from .normalize import normalize_text
 from .utils import generate_cache_key
 from .storage import EmbeddingStorage
-from .providers import LocalProvider, RemoteProvider
+from .providers import LocalProvider, RemoteProvider, OpenAIProvider
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +52,15 @@ class EmbeddingCache:
         db_path = Path(cache_dir) / "cache.db"
         self.storage = EmbeddingStorage(str(db_path))
 
-        # Initialize providers
-        self.local_provider = LocalProvider(model=model)
+        # Initialize providers based on model prefix
+        if model.startswith("openai:"):
+            # Extract actual model name: "openai:text-embedding-3-small" -> "text-embedding-3-small"
+            actual_model = model.split(":", 1)[1]
+            self.local_provider = OpenAIProvider(model=actual_model)
+        else:
+            # Local model (nomic-embed or other sentence-transformers model)
+            self.local_provider = LocalProvider(model=model)
+
         self.remote_provider = RemoteProvider(remote_url, timeout=timeout, model=model) if remote_url else None
 
         # Set up fallback chain

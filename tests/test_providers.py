@@ -1,8 +1,9 @@
 """Tests for embedding providers."""
 
 import numpy as np
+import os
 import pytest
-from embedding_cache.providers import LocalProvider, RemoteProvider
+from embedding_cache.providers import LocalProvider, RemoteProvider, OpenAIProvider
 from unittest.mock import Mock, patch
 import httpx
 
@@ -116,3 +117,37 @@ def test_remote_provider_network_error():
         provider = RemoteProvider(backend_url="http://test.com", timeout=5.0)
         with pytest.raises(RuntimeError, match="Remote backend error"):
             provider.embed("hello")
+
+
+def test_openai_provider_unavailable():
+    """Should detect when openai package is not installed."""
+    import sys
+    # Save original module state
+    original_openai = sys.modules.get('openai')
+
+    try:
+        # Make openai import fail by setting it to None in sys.modules
+        sys.modules['openai'] = None
+
+        # Create provider and call is_available()
+        provider = OpenAIProvider()
+        result = provider.is_available()
+
+        # Verify it returns False when openai is not available
+        assert result is False
+    finally:
+        # Restore original state
+        if original_openai is None:
+            sys.modules.pop('openai', None)
+        else:
+            sys.modules['openai'] = original_openai
+
+
+def test_openai_provider_no_api_key():
+    """Should detect when OPENAI_API_KEY is not set."""
+    # Clear all environment variables to ensure no API key
+    with patch.dict(os.environ, {}, clear=True):
+        provider = OpenAIProvider()
+        result = provider.is_available()
+        # Verify it returns False when API key is not set
+        assert result is False

@@ -4,6 +4,7 @@ import numpy as np
 from typing import List, Optional
 import logging
 import httpx
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -143,3 +144,77 @@ class RemoteProvider:
             List of embedding vectors
         """
         return self._call_backend(texts)
+
+
+class OpenAIProvider:
+    """OpenAI embedding provider using OpenAI API."""
+
+    def __init__(self, model: str = "text-embedding-3-small", api_key: Optional[str] = None):
+        """Initialize OpenAI provider.
+
+        Args:
+            model: OpenAI model name
+            api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
+        """
+        self.model = model
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self._client: Optional[object] = None
+
+    def is_available(self) -> bool:
+        """Check if openai package is installed and API key is set."""
+        try:
+            import openai
+            return self.api_key is not None
+        except ImportError:
+            return False
+
+    def _load_client(self):
+        """Lazy load the OpenAI client."""
+        if self._client is not None:
+            return
+
+        if not self.is_available():
+            raise RuntimeError(
+                "OpenAI not available. "
+                "Install with: pip install openai, "
+                "and set OPENAI_API_KEY environment variable"
+            )
+
+        from openai import OpenAI
+        logger.info(f"Initializing OpenAI client with model {self.model}...")
+        self._client = OpenAI(api_key=self.api_key)
+        logger.info(f"OpenAI client initialized successfully")
+
+    def embed(self, text: str) -> np.ndarray:
+        """Embed a single text string.
+
+        Args:
+            text: Input text
+
+        Returns:
+            Embedding vector
+        """
+        self._load_client()
+        response = self._client.embeddings.create(
+            input=[text],
+            model=self.model
+        )
+        embedding = np.array(response.data[0].embedding, dtype=np.float32)
+        return embedding
+
+    def embed_batch(self, texts: List[str]) -> List[np.ndarray]:
+        """Embed multiple text strings.
+
+        Args:
+            texts: List of input texts
+
+        Returns:
+            List of embedding vectors
+        """
+        self._load_client()
+        response = self._client.embeddings.create(
+            input=texts,
+            model=self.model
+        )
+        embeddings = [np.array(item.embedding, dtype=np.float32) for item in response.data]
+        return embeddings

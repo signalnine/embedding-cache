@@ -61,11 +61,56 @@ With local model support:
 pip install embedding-cache[local]
 ```
 
+With OpenAI support:
+
+```bash
+pip install embedding-cache[openai]
+```
+
+With both local and OpenAI support:
+
+```bash
+pip install embedding-cache[local,openai]
+```
+
 Development installation:
 
 ```bash
 pip install -e .[dev,local]
 ```
+
+## Usage with OpenAI
+
+Set your API key:
+
+```bash
+export OPENAI_API_KEY=your-key-here
+```
+
+Use OpenAI embeddings:
+
+```python
+from embedding_cache import EmbeddingCache
+
+# Create cache with OpenAI model (note the "openai:" prefix)
+cache = EmbeddingCache(model="openai:text-embedding-3-small")
+
+# Use it like any other provider
+vector = cache.embed("hello world")
+print(vector.shape)  # (1536,)
+
+# Subsequent calls hit the cache
+vector2 = cache.embed("hello world")
+print(cache.stats)
+# {'hits': 1, 'misses': 1, 'remote_hits': 0}
+```
+
+The OpenAI provider:
+- Uses the OpenAI API with automatic retries
+- Caches embeddings locally just like other providers
+- Requires `OPENAI_API_KEY` environment variable
+- Supports batch embedding (up to 2048 texts per request)
+- Returns 1536-dimensional embeddings for text-embedding-3-small
 
 ## Quick Start
 

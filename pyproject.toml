@@ -46,6 +46,9 @@ dev = [
     "pytest-mock>=3.10",
 ]
 
+[project.scripts]
+embedding-cache = "embedding_cache.cli:main"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

@@ -1,5 +1,10 @@
 # embedding-cache
 
+[![CI](https://github.com/signalnine/embedding-cache/actions/workflows/ci.yml/badge.svg)](https://github.com/signalnine/embedding-cache/actions/workflows/ci.yml)
+[![PyPI version](https://badge.fury.io/py/embedding-cache.svg)](https://badge.fury.io/py/embedding-cache)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A Python client library that caches embedding vectors locally with smart fallback to a hosted backend. Eliminates API costs and latency through local caching while maintaining reliability.
 
 ## Features

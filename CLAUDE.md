@@ -4,80 +4,110 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Vector Embedding Cache** - A public, searchable database of string-to-vector embeddings. The core idea is to cache pre-computed embeddings to reduce API costs and latency.
+**Vector Embedding Cache** - A Python library for caching string-to-vector embeddings. Reduces API costs and latency by caching pre-computed embeddings locally.
 
-**Current Status**: Idea/planning phase. No code implementation exists yet - only design documentation.
+**Current Status**: Implemented and working. Tested with semantic-tarot as the first real-world client.
 
-## Architecture (Planned)
+## Architecture
 
 ### Core Flow
-1. Hash incoming string (SHA-256)
-2. Check if embedding exists in cache database
-3. Cache hit → return cached vectors (free, fast)
+1. Hash incoming string (SHA-256) combined with model name
+2. Check if embedding exists in JSON cache file
+3. Cache hit → return cached vectors (instant, free)
 4. Cache miss → compute via embedding model, cache result, return
 
-### Key Design Decisions
+### Implemented Features
+- **Multiple model support**: Local models (nomic-embed-text-v1.5, v2-moe) and OpenAI
+- **Model prefix routing**: `"openai:text-embedding-3-small"` routes to OpenAI provider
+- **JSON file storage**: Simple, portable cache files
+- **Batch operations**: `embed_batch()` for multiple texts
+- **Thread-safe**: Safe for concurrent use
+- **Zero cost for local models**: No API fees with sentence-transformers
 
-**MVP Scope**:
-- Single model support: `text-embedding-3-small` (or self-hosted `nomic-embed-text-v2`)
-- Simple hash lookup (exact match only)
-- SQLite storage for prototype
-- Basic REST API
-- OpenAI fallback for cache misses (or local model)
+### Tech Stack
+- **Language**: Python 3.8+
+- **Storage**: JSON file cache (default: `~/.cache/embedding_cache/`)
+- **Local Models**: sentence-transformers with nomic-embed-text-v1.5 (recommended)
+- **Optional**: OpenAI API for cloud embeddings
 
-**Proposed Tech Stack**:
-- Backend: Python (FastAPI) or Go
-- Database: Postgres + pgvector
-- Cache layer: Redis for hot embeddings
-- Embedding Model: nomic-embed-text-v2 (self-hosted, 768 dimensions, Apache 2.0)
-- Hosting: Fly.io or Railway for prototype
+## Project Structure
 
-### Storage Schema
-- Key: hash of input string
-- Value: embedding vector (768-1536 floats depending on model)
-- Metadata: model used, timestamp, optionally original string
-
-## API Design (Planned)
-
-**Single embedding**:
 ```
-POST /embed
-{
-  "text": "hello world",
-  "model": "text-embedding-3-small"
-}
+embedding_cache/
+├── __init__.py          # Public API: EmbeddingCache class
+├── cache.py             # Main EmbeddingCache implementation
+└── providers.py         # LocalProvider, RemoteProvider, OpenAIProvider
+
+tests/
+├── test_cache.py        # Cache functionality tests
+└── test_providers.py    # Provider tests including OpenAI mocks
 ```
 
-**Batch embeddings**:
+## Usage
+
+```python
+from embedding_cache import EmbeddingCache
+
+# Local model (recommended - zero cost)
+cache = EmbeddingCache(model="nomic-ai/nomic-embed-text-v1.5")
+embedding = cache.embed("hello world")  # Returns numpy array
+
+# Batch embeddings
+embeddings = cache.embed_batch(["hello", "world", "foo"])
+
+# OpenAI model (requires API key)
+cache = EmbeddingCache(model="openai:text-embedding-3-small")
 ```
-POST /embed/batch
-{
-  "texts": ["hello", "world", "foo"],
-  "model": "text-embedding-3-small"
-}
+
+## Model Recommendations
+
+| Model | Dimensions | Cost | Use Case |
+|-------|-----------|------|----------|
+| nomic-ai/nomic-embed-text-v1.5 | 768 | $0 | **Default choice** - stable, precise |
+| nomic-ai/nomic-embed-text-v2-moe | 768 | $0 | Alternative - broader associations |
+| openai:text-embedding-3-small | 1536 | $0.0001/1K tokens | Highest quality, requires API key |
+
+**v1.5 is recommended** based on testing with semantic-tarot. See `docs/plans/` for comparison details.
+
+## Development
+
+### Running Tests
+```bash
+pytest tests/ -v
 ```
 
-## Important Considerations
+### Installation
+```bash
+# Local models (recommended)
+pip install -e ".[local]"
 
-**Model Versioning**: Different model versions produce different vectors. Cache must be model-specific.
+# With OpenAI support
+pip install -e ".[openai]"
+```
 
-**Normalization**: Need consistent approach to handle "Hello World" vs "hello world" vs "  hello world  ".
+## Key Design Decisions
 
-**Privacy**: Storing original strings could be sensitive. Consider hash-only storage.
+**Cache Key Format**: JSON-encoded tuple of `[model_name, text]` hashed with SHA-256. This ensures model-specific caching.
 
-**Storage Costs**: 1536 floats × 4 bytes = 6KB per embedding (or 3KB for nomic-embed's 768 dims).
+**Provider Pattern**: `LocalProvider` (sentence-transformers), `RemoteProvider` (future HTTP API), `OpenAIProvider` (OpenAI API). All share the same interface.
+
+**Lazy Loading**: Models are loaded only when first needed via `_load_model()` / `_load_client()`.
+
+**No Normalization**: Text is cached as-is. Normalization is the caller's responsibility.
+
+## Integration Example: semantic-tarot
+
+The library is tested with [semantic-tarot](../semantic-tarot/), which uses it for:
+- 780 card embeddings (78 cards × 2 positions × 5 systems)
+- Semantic search queries
+- Zero-cost regeneration via cache hits
+
+See `semantic-tarot/EMBEDDING_CACHE_INTEGRATION.md` for integration details.
 
 ## Future Extensions
 
-- Multiple model support
-- Similarity search on cached embeddings
-- Pre-seeded common phrases/words
-- Client libraries (Python, JS)
-- Self-hostable Docker image
-- Federated network of nodes (DHT/gossip protocol)
-
-## Development Notes
-
-When implementing, test with semantic-tarot as the first client to measure real-world cache hit rates.
-
-Self-hosted nomic-embed-text-v2 eliminates per-request API costs and provides full control over the pipeline.
+- [ ] Remote cache server (REST API)
+- [ ] Similarity search on cached embeddings
+- [ ] Pre-seeded common phrases/words
+- [ ] Redis cache layer for hot embeddings
+- [ ] Client libraries (JS, Go)

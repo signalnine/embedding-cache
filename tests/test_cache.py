@@ -3,9 +3,8 @@
 import pytest
 import numpy as np
 import tempfile
-import os
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 from embedding_cache.cache import EmbeddingCache
 

@@ -1,8 +1,6 @@
 """Pytest configuration and shared fixtures."""
 
 import pytest
-import tempfile
-from pathlib import Path
 
 
 @pytest.fixture

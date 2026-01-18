@@ -24,7 +24,7 @@ class LocalProvider:
     def is_available(self) -> bool:
         """Check if sentence-transformers is installed."""
         try:
-            import sentence_transformers
+            import sentence_transformers  # noqa: F401
             return True
         except ImportError:
             return False
@@ -163,7 +163,7 @@ class OpenAIProvider:
     def is_available(self) -> bool:
         """Check if openai package is installed and API key is set."""
         try:
-            import openai
+            import openai  # noqa: F401
             return self.api_key is not None
         except ImportError:
             return False
@@ -183,7 +183,7 @@ class OpenAIProvider:
         from openai import OpenAI
         logger.info(f"Initializing OpenAI client with model {self.model_name}...")
         self._client = OpenAI(api_key=self.api_key)
-        logger.info(f"OpenAI client initialized successfully")
+        logger.info("OpenAI client initialized successfully")
 
     def embed(self, text: str) -> np.ndarray:
         """Embed a single text string.

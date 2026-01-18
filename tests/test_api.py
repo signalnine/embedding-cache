@@ -1,7 +1,5 @@
 """Tests for public API."""
 
-import os
-import pytest
 import numpy as np
 import tempfile
 from unittest.mock import Mock, patch
@@ -61,14 +59,14 @@ def test_embed_singleton_persistence():
             mock_cache.embed.return_value = test_embedding
 
             # Patch EmbeddingCache constructor to return our mock
-            with patch('embedding_cache.EmbeddingCache', return_value=mock_cache) as MockCache:
+            with patch('embedding_cache.EmbeddingCache', return_value=mock_cache) as MockClass:
                 # Call embed function multiple times
-                result1 = embed("first")
-                result2 = embed("second")
-                result3 = embed("third")
+                embed("first")
+                embed("second")
+                embed("third")
 
                 # Constructor should only be called once (singleton created once)
-                MockCache.assert_called_once()
+                MockClass.assert_called_once()
 
                 # embed should be called 3 times on the same instance
                 assert mock_cache.embed.call_count == 3

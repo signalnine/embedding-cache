@@ -8,7 +8,7 @@ from embedding_cache.storage import EmbeddingStorage
 def test_storage_init_creates_database(temp_cache_dir):
     """Should create database file on initialization."""
     db_path = Path(temp_cache_dir) / "test.db"
-    storage = EmbeddingStorage(str(db_path))
+    _ = EmbeddingStorage(str(db_path))  # Side effect: creates database
     assert db_path.exists()
 
 

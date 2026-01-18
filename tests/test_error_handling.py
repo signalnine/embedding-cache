@@ -2,7 +2,6 @@
 
 import pytest
 import numpy as np
-from unittest.mock import Mock
 
 from embedding_cache.cache import EmbeddingCache
 

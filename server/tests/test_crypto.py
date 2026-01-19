@@ -1,6 +1,12 @@
 # server/tests/test_crypto.py
 import pytest
-from app.crypto import encrypt_api_key, decrypt_api_key, hash_api_key, generate_api_key
+from app.crypto import (
+    encrypt_api_key,
+    decrypt_api_key,
+    hash_api_key,
+    generate_api_key,
+    get_key_prefix,
+)
 
 
 def test_encrypt_decrypt_roundtrip():
@@ -38,3 +44,11 @@ def test_generate_api_key_format():
     key = generate_api_key()
     assert key.startswith("vec_")
     assert len(key) == 36  # vec_ + 32 chars
+
+
+def test_get_key_prefix():
+    """Key prefix should return first 12 characters."""
+    key = "vec_abc123456789xyz"
+    prefix = get_key_prefix(key)
+    assert prefix == "vec_abc12345"
+    assert len(prefix) == 12

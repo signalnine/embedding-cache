@@ -1,6 +1,7 @@
 # server/app/schemas.py
+from typing import Any
+
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
 
 
 # Auth schemas
@@ -63,7 +64,7 @@ class ProviderRequest(BaseModel):
     name: str
     endpoint: str
     api_key: str
-    request_template: dict
+    request_template: dict[str, Any]
     response_path: str
 
 

@@ -28,7 +28,11 @@ def _get_model(model_name: str):
             "nomic-v2-moe": "nomic-ai/nomic-embed-text-v2-moe",
         }
         hf_name = model_map.get(model_name, model_name)
-        _model_cache[model_name] = SentenceTransformer(hf_name, device=settings.gpu_device)
+        _model_cache[model_name] = SentenceTransformer(
+            hf_name,
+            device=settings.gpu_device,
+            trust_remote_code=True,
+        )
 
     return _model_cache[model_name]
 

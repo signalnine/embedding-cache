@@ -1,7 +1,6 @@
 # server/app/models.py
 from datetime import datetime
-from sqlalchemy import Column, String, Text, Integer, LargeBinary, DateTime, ForeignKey, Index
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, String, Text, Integer, LargeBinary, DateTime, ForeignKey, Index, JSON
 from app.database import Base
 
 
@@ -54,7 +53,7 @@ class Provider(Base):
     name = Column(String, nullable=False)
     endpoint = Column(String, nullable=False)
     api_key_encrypted = Column(Text, nullable=False)
-    request_template = Column(JSONB, nullable=False)
+    request_template = Column(JSON, nullable=False)
     response_path = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 

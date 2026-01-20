@@ -18,8 +18,14 @@ async def check_rate_limit(user_id: str, tier: str) -> bool:
 
     Raises RateLimitExceeded if over limit.
     Returns True if allowed.
+    Skips rate limiting if Redis is not configured.
     """
     redis = await get_redis()
+
+    # Skip rate limiting if Redis is not configured
+    if redis is None:
+        return True
+
     today = date.today().isoformat()
     key = f"rate:{user_id}:{today}"
 
@@ -40,6 +46,11 @@ async def check_rate_limit(user_id: str, tier: str) -> bool:
 async def get_usage_count(user_id: str) -> int:
     """Get current day's request count for user."""
     redis = await get_redis()
+
+    # Return 0 if Redis is not configured
+    if redis is None:
+        return 0
+
     today = date.today().isoformat()
     key = f"rate:{user_id}:{today}"
 

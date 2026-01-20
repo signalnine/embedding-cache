@@ -45,4 +45,4 @@ jobs:
           pip install ruff==0.8.6
 
       - name: Run linter
-        run: ruff check embedding_cache/ tests/
+        run: ruff check vector_embed_cache/ tests/

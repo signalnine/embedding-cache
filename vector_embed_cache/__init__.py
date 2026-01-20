@@ -33,7 +33,7 @@ def embed(text: Union[str, List[str]]) -> Union[np.ndarray, List[np.ndarray]]:
         Single embedding array or list of embedding arrays
 
     Example:
-        >>> from embedding_cache import embed
+        >>> from vector_embed_cache import embed
         >>> embedding = embed("Hello world")
         >>> embeddings = embed(["Hello", "World"])
 

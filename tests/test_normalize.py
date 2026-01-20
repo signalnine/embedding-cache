@@ -1,6 +1,6 @@
 """Tests for text normalization."""
 
-from embedding_cache.normalize import normalize_text
+from vector_embed_cache.normalize import normalize_text
 
 
 def test_normalize_lowercase():

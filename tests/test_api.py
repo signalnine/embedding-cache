@@ -4,7 +4,7 @@ import numpy as np
 import tempfile
 from unittest.mock import Mock, patch
 
-from embedding_cache import embed, EmbeddingCache
+from vector_embed_cache import embed, EmbeddingCache
 
 
 def test_embed_function_exists():
@@ -22,8 +22,8 @@ def test_embed_function_simple_usage():
     """Test that embed() function works with simple function call."""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Reset singleton for this test
-        import embedding_cache
-        embedding_cache._default_cache = None
+        import vector_embed_cache
+        vector_embed_cache._default_cache = None
 
         # Patch env var to use temp directory
         with patch.dict('os.environ', {'EMBEDDING_CACHE_DIR': tmpdir}):
@@ -33,7 +33,7 @@ def test_embed_function_simple_usage():
             mock_cache.embed.return_value = test_embedding
 
             # Patch EmbeddingCache constructor to return our mock
-            with patch('embedding_cache.EmbeddingCache', return_value=mock_cache):
+            with patch('vector_embed_cache.EmbeddingCache', return_value=mock_cache):
                 # Call embed function
                 result = embed("Hello world")
 
@@ -48,8 +48,8 @@ def test_embed_singleton_persistence():
     """Test that embed() reuses the same singleton across multiple calls."""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Reset singleton for this test
-        import embedding_cache
-        embedding_cache._default_cache = None
+        import vector_embed_cache
+        vector_embed_cache._default_cache = None
 
         # Patch env var to use temp directory
         with patch.dict('os.environ', {'EMBEDDING_CACHE_DIR': tmpdir}):
@@ -59,7 +59,7 @@ def test_embed_singleton_persistence():
             mock_cache.embed.return_value = test_embedding
 
             # Patch EmbeddingCache constructor to return our mock
-            with patch('embedding_cache.EmbeddingCache', return_value=mock_cache) as MockClass:
+            with patch('vector_embed_cache.EmbeddingCache', return_value=mock_cache) as MockClass:
                 # Call embed function multiple times
                 embed("first")
                 embed("second")

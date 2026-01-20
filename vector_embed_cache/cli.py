@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command-line interface for embedding-cache."""
+"""Command-line interface for vector-embed-cache."""
 
 import argparse
 import os
@@ -94,7 +94,7 @@ def cmd_clear(args):
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        prog="embedding-cache",
+        prog="vector-embed-cache",
         description="Manage embedding cache",
     )
     subparsers = parser.add_subparsers(dest="command", help="Commands")

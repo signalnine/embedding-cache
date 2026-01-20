@@ -1,11 +1,11 @@
-# embedding-cache
+# vector-embed-cache
 
 [![CI](https://github.com/signalnine/embedding-cache/actions/workflows/ci.yml/badge.svg)](https://github.com/signalnine/embedding-cache/actions/workflows/ci.yml)
-[![PyPI version](https://badge.fury.io/py/embedding-cache.svg)](https://badge.fury.io/py/embedding-cache)
+[![PyPI version](https://badge.fury.io/py/vector-embed-cache.svg)](https://badge.fury.io/py/vector-embed-cache)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A Python client library that caches embedding vectors locally with smart fallback to a hosted backend. Eliminates API costs and latency through local caching while maintaining reliability.
+A Python library and self-hosted backend for caching embedding vectors. Eliminates API costs and latency through local caching while maintaining reliability.
 
 ## Features
 
@@ -19,7 +19,9 @@ A Python client library that caches embedding vectors locally with smart fallbac
 
 🎯 **Simple API with advanced options for power users** - Start simple, scale to complex use cases
 
-## Why embedding-cache?
+🖥️ **Self-hosted backend available** - FastAPI server with multi-tenant caching, rate limiting, and BYOK support
+
+## Why vector-embed-cache?
 
 ### vs RedisVL / Remote Caches
 - **No Redis setup required** - Just SQLite, no external dependencies
@@ -39,7 +41,7 @@ A Python client library that caches embedding vectors locally with smart fallbac
 - **Smart fallback** - Local model → remote backend → error
 - **Zero config** - Works out of the box with sensible defaults
 
-### When to use embedding-cache
+### When to use vector-embed-cache
 ✅ Prototyping with embeddings locally
 ✅ Reducing API costs for embedding computation
 ✅ Offline or air-gapped environments
@@ -57,25 +59,25 @@ A Python client library that caches embedding vectors locally with smart fallbac
 Basic installation:
 
 ```bash
-pip install embedding-cache
+pip install vector-embed-cache
 ```
 
 With local model support:
 
 ```bash
-pip install embedding-cache[local]
+pip install vector-embed-cache[local]
 ```
 
 With OpenAI support:
 
 ```bash
-pip install embedding-cache[openai]
+pip install vector-embed-cache[openai]
 ```
 
 With both local and OpenAI support:
 
 ```bash
-pip install embedding-cache[local,openai]
+pip install vector-embed-cache[local,openai]
 ```
 
 Development installation:
@@ -95,7 +97,7 @@ export OPENAI_API_KEY=your-key-here
 Use OpenAI embeddings:
 
 ```python
-from embedding_cache import EmbeddingCache
+from vector_embed_cache import EmbeddingCache
 
 # Create cache with OpenAI model (note the "openai:" prefix)
 cache = EmbeddingCache(model="openai:text-embedding-3-small")
@@ -130,7 +132,7 @@ embedding-cache supports multiple embedding models. Here's how they compare:
 ### Switching Models
 
 ```python
-from embedding_cache import EmbeddingCache
+from vector_embed_cache import EmbeddingCache
 
 # Use v1.5 (default, fast and reliable)
 cache_v15 = EmbeddingCache(model="nomic-ai/nomic-embed-text-v1.5")
@@ -151,7 +153,7 @@ All models benefit from the same caching layer, so repeated queries are instant 
 The simplest way to use embedding-cache is with the `embed()` function:
 
 ```python
-from embedding_cache import embed
+from vector_embed_cache import embed
 
 # Single string
 vector = embed("hello world")
@@ -168,7 +170,7 @@ print(vectors[0].shape)  # (768,)
 For more control over configuration, use the `EmbeddingCache` class:
 
 ```python
-from embedding_cache import EmbeddingCache
+from vector_embed_cache import EmbeddingCache
 
 # Create cache with custom settings
 cache = EmbeddingCache(
@@ -249,7 +251,7 @@ The default model is **nomic-embed-text-v1.5** from nomic-ai:
 - **License**: Open-source (Apache 2.0)
 - **Requirements**: sentence-transformers, torch, einops
 
-Install with: `pip install embedding-cache[local]`
+Install with: `pip install vector-embed-cache[local]`
 
 ## Testing
 
@@ -274,7 +276,7 @@ pytest tests/
 Run with coverage:
 
 ```bash
-pytest tests/ --cov=embedding_cache --cov-report=html
+pytest tests/ --cov=vector_embed_cache --cov-report=html
 ```
 
 ## Development
@@ -301,7 +303,7 @@ pytest
 Run tests with coverage:
 
 ```bash
-pytest --cov=embedding_cache --cov-report=html
+pytest --cov=vector_embed_cache --cov-report=html
 open htmlcov/index.html  # macOS
 # or: xdg-open htmlcov/index.html  # Linux
 # or: start htmlcov/index.html     # Windows
@@ -349,12 +351,40 @@ Please ensure your code:
 - Follows the existing code style
 - Includes docstrings for new functions/classes
 
+## Self-Hosted Backend
+
+For teams needing centralized caching with multi-tenant support, see the [server documentation](server/README.md).
+
+**Features:**
+- Multi-tenant embedding cache with PostgreSQL
+- Hybrid compute: BYOK (free tier) or server GPU (paid tier)
+- JWT authentication with API keys
+- Rate limiting with Redis
+- Prometheus metrics endpoint
+
+**Quick start:**
+```bash
+cd server
+pip install -r requirements.txt
+export DATABASE_URL="postgresql://user:pass@localhost/embeddings"
+export JWT_SECRET="your-secret"
+export ENCRYPTION_KEY="your-key"
+uvicorn app.main:app --port 8000
+```
+
 ## Roadmap
 
-Future features under consideration:
+### Completed
+- [x] Local SQLite caching with CLI management
+- [x] Multiple model support (nomic v1.5, v2-moe, OpenAI)
+- [x] Self-hosted backend with FastAPI
+- [x] BYOK provider support for free tier
+- [x] JWT authentication and API keys
+- [x] Rate limiting with Redis
 
-- [ ] Support for additional embedding models (OpenAI, Cohere, etc.)
-- [ ] Batch embedding optimization for large datasets
-- [ ] Cache compression to reduce disk usage
-- [ ] Async API support for concurrent embedding requests
-- [ ] Cache export/import for sharing between systems
+### Future
+- [ ] Similarity search on cached embeddings (pgvector)
+- [ ] Pre-seeded common phrases/words
+- [ ] Client libraries (JavaScript, Go)
+- [ ] Admin dashboard
+- [ ] Cache compression to reduce storage

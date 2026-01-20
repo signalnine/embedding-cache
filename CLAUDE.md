@@ -4,49 +4,89 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Vector Embedding Cache** - A Python library for caching string-to-vector embeddings. Reduces API costs and latency by caching pre-computed embeddings locally.
+**Vector Embedding Cache** - A Python library and hosted backend for caching string-to-vector embeddings. Reduces API costs and latency through local or remote caching of pre-computed embeddings.
 
-**Current Status**: Implemented and working. Tested with semantic-tarot as the first real-world client.
+**Current Status**:
+- **Library**: Production-ready, published to PyPI as `vector-embed-cache`
+- **Server**: Implemented and tested, ready for deployment
 
 ## Architecture
 
-### Core Flow
+### Library (vector_embed_cache/)
+
+**Core Flow:**
 1. Hash incoming string (SHA-256) combined with model name
-2. Check if embedding exists in JSON cache file
+2. Check if embedding exists in SQLite cache file
 3. Cache hit → return cached vectors (instant, free)
 4. Cache miss → compute via embedding model, cache result, return
 
-### Implemented Features
-- **Multiple model support**: Local models (nomic-embed-text-v1.5, v2-moe) and OpenAI
-- **Model prefix routing**: `"openai:text-embedding-3-small"` routes to OpenAI provider
-- **JSON file storage**: Simple, portable cache files
-- **Batch operations**: `embed_batch()` for multiple texts
-- **Thread-safe**: Safe for concurrent use
-- **Zero cost for local models**: No API fees with sentence-transformers
+**Features:**
+- Multiple model support: Local models (nomic-embed-text-v1.5, v2-moe) and OpenAI
+- Model prefix routing: `"openai:text-embedding-3-small"` routes to OpenAI provider
+- SQLite file storage: Simple, portable cache files
+- Batch operations: `embed_batch()` for multiple texts
+- Thread-safe: Safe for concurrent use
+- CLI tool: `embedding-cache stats`, `embedding-cache clear`
 
-### Tech Stack
-- **Language**: Python 3.8+
-- **Storage**: JSON file cache (default: `~/.cache/embedding_cache/`)
-- **Local Models**: sentence-transformers with nomic-embed-text-v1.5 (recommended)
-- **Optional**: OpenAI API for cloud embeddings
+### Server (server/)
+
+**Hybrid Compute Model:**
+- **Free tier**: BYOK (Bring Your Own Key) - users configure their own API provider
+- **Paid tier**: Server-side GPU compute using nomic-embed-text-v1.5
+
+**Tech Stack:**
+- FastAPI with async support
+- PostgreSQL for embedding storage
+- Redis for rate limiting (optional, gracefully degrades)
+- ProcessPoolExecutor for GPU compute isolation
+- Fernet encryption for API keys at rest
+- JWT authentication with bcrypt password hashing
 
 ## Project Structure
 
 ```
-embedding_cache/
-├── __init__.py          # Public API: EmbeddingCache class
-├── cache.py             # Main EmbeddingCache implementation
-└── providers.py         # LocalProvider, RemoteProvider, OpenAIProvider
+vector_embed_cache/          # Python library (PyPI package)
+├── __init__.py              # Public API: EmbeddingCache, embed()
+├── cache.py                 # Main EmbeddingCache implementation
+├── storage.py               # SQLite storage layer
+├── normalize.py             # Text normalization
+├── providers.py             # LocalProvider, OpenAIProvider
+├── cli.py                   # CLI commands
+└── utils.py                 # Utility functions
 
-tests/
-├── test_cache.py        # Cache functionality tests
-└── test_providers.py    # Provider tests including OpenAI mocks
+server/                      # Hosted backend (FastAPI)
+├── app/
+│   ├── main.py              # FastAPI application
+│   ├── config.py            # Pydantic settings
+│   ├── models.py            # SQLAlchemy ORM models
+│   ├── schemas.py           # Pydantic request/response schemas
+│   ├── auth.py              # JWT + bcrypt authentication
+│   ├── crypto.py            # Fernet encryption for API keys
+│   ├── database.py          # Database connection
+│   ├── redis_client.py      # Redis connection (optional)
+│   ├── rate_limit.py        # Rate limiting middleware
+│   ├── cache.py             # Embedding cache operations
+│   ├── compute.py           # GPU embedding computation
+│   ├── normalize.py         # Text normalization
+│   ├── passthrough.py       # BYOK provider passthrough
+│   └── routes/
+│       ├── users.py         # Auth endpoints
+│       ├── embed.py         # Embedding endpoints
+│       └── providers.py     # Provider config endpoints
+├── tests/                   # Server unit tests (35 tests)
+├── alembic/                 # Database migrations
+├── scripts/
+│   └── seed.py              # Pre-seeding script
+└── requirements.txt         # Server dependencies
+
+tests/                       # Library unit tests
+docs/plans/                  # Design documents and implementation plans
 ```
 
 ## Usage
 
 ```python
-from embedding_cache import EmbeddingCache
+from vector_embed_cache import EmbeddingCache
 
 # Local model (recommended - zero cost)
 cache = EmbeddingCache(model="nomic-ai/nomic-embed-text-v1.5")
@@ -71,12 +111,18 @@ cache = EmbeddingCache(model="openai:text-embedding-3-small")
 
 ## Development
 
-### Running Tests
+### Running Library Tests
 ```bash
 pytest tests/ -v
 ```
 
-### Installation
+### Running Server Tests
+```bash
+cd server
+pytest tests/ -v
+```
+
+### Library Installation
 ```bash
 # Local models (recommended)
 pip install -e ".[local]"
@@ -85,15 +131,47 @@ pip install -e ".[local]"
 pip install -e ".[openai]"
 ```
 
+### Server Installation
+```bash
+cd server
+pip install -r requirements.txt
+
+# Set required environment variables
+export DATABASE_URL="postgresql://user:pass@localhost/embeddings"
+export JWT_SECRET="your-jwt-secret"
+export ENCRYPTION_KEY="your-encryption-key"
+
+# Optional: Redis for rate limiting
+export REDIS_URL="redis://localhost:6379"
+
+# Start server
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
 ## Key Design Decisions
 
-**Cache Key Format**: JSON-encoded tuple of `[model_name, text]` hashed with SHA-256. This ensures model-specific caching.
+**Library:**
+- **Cache Key Format**: SHA-256 hash of normalized text + model name
+- **Provider Pattern**: `LocalProvider`, `OpenAIProvider` share common interface
+- **Lazy Loading**: Models loaded on first use
+- **Text Normalization**: Whitespace collapsed, lowercased for cache key generation
 
-**Provider Pattern**: `LocalProvider` (sentence-transformers), `RemoteProvider` (future HTTP API), `OpenAIProvider` (OpenAI API). All share the same interface.
+**Server:**
+- **Hybrid Compute**: Free tier = BYOK, Paid tier = server GPU
+- **Multi-tenant**: Embeddings isolated by tenant_id (user_id)
+- **BYOK Security**: API keys encrypted at rest with Fernet, SSRF protection on endpoints
+- **Rate Limiting**: Redis-based daily counters (gracefully degrades without Redis)
+- **Composite Primary Key**: (text_hash, model, model_version, tenant_id) for versioned caching
 
-**Lazy Loading**: Models are loaded only when first needed via `_load_model()` / `_load_client()`.
+## Server Database Models
 
-**No Normalization**: Text is cached as-is. Normalization is the caller's responsibility.
+| Model | Purpose |
+|-------|---------|
+| User | Account with email, password_hash, tier |
+| ApiKey | API authentication with key_hash, prefix |
+| Embedding | Cached vectors with composite key |
+| Provider | BYOK provider configuration |
+| Usage | Daily usage tracking per user |
 
 ## Integration Example: semantic-tarot
 
@@ -102,12 +180,19 @@ The library is tested with [semantic-tarot](../semantic-tarot/), which uses it f
 - Semantic search queries
 - Zero-cost regeneration via cache hits
 
-See `semantic-tarot/EMBEDDING_CACHE_INTEGRATION.md` for integration details.
+## Roadmap
 
-## Future Extensions
+### Completed
+- [x] Local SQLite caching
+- [x] Multiple model support (nomic, OpenAI)
+- [x] CLI tool for cache management
+- [x] Hosted backend with FastAPI
+- [x] BYOK provider support
+- [x] JWT authentication
+- [x] Rate limiting
 
-- [ ] Remote cache server (REST API)
-- [ ] Similarity search on cached embeddings
+### Future
+- [ ] Similarity search on cached embeddings (pgvector)
 - [ ] Pre-seeded common phrases/words
-- [ ] Redis cache layer for hot embeddings
 - [ ] Client libraries (JS, Go)
+- [ ] Admin dashboard

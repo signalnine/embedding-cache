@@ -3,7 +3,7 @@
 import numpy as np
 import os
 import pytest
-from embedding_cache.providers import LocalProvider, RemoteProvider, OpenAIProvider
+from vector_embed_cache.providers import LocalProvider, RemoteProvider, OpenAIProvider
 from unittest.mock import Mock, patch
 import httpx
 
@@ -155,7 +155,7 @@ def test_openai_provider_no_api_key():
 
 def test_openai_provider_embed_single():
     """Should embed single text via OpenAI API."""
-    from embedding_cache.providers import OpenAIProvider
+    from vector_embed_cache.providers import OpenAIProvider
 
     # Mock OpenAI client
     mock_client = Mock()
@@ -165,7 +165,7 @@ def test_openai_provider_embed_single():
 
     provider = OpenAIProvider(model="text-embedding-3-small", api_key="test-key")
 
-    with patch('embedding_cache.providers.OpenAIProvider._load_client'):
+    with patch('vector_embed_cache.providers.OpenAIProvider._load_client'):
         provider._client = mock_client
         embedding = provider.embed("hello world")
 
@@ -180,7 +180,7 @@ def test_openai_provider_embed_single():
 
 def test_openai_provider_embed_batch():
     """Should embed multiple texts via OpenAI API."""
-    from embedding_cache.providers import OpenAIProvider
+    from vector_embed_cache.providers import OpenAIProvider
 
     # Mock OpenAI client
     mock_client = Mock()
@@ -193,7 +193,7 @@ def test_openai_provider_embed_batch():
 
     provider = OpenAIProvider(model="text-embedding-3-small", api_key="test-key")
 
-    with patch('embedding_cache.providers.OpenAIProvider._load_client'):
+    with patch('vector_embed_cache.providers.OpenAIProvider._load_client'):
         provider._client = mock_client
         embeddings = provider.embed_batch(["hello", "world"])
 

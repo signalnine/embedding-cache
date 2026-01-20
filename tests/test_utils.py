@@ -1,6 +1,6 @@
 """Tests for utility functions."""
 
-from embedding_cache.utils import generate_cache_key
+from vector_embed_cache.utils import generate_cache_key
 
 
 def test_generate_cache_key_consistent():

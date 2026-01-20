@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Basic usage of embedding-cache."""
 
-from embedding_cache import embed, EmbeddingCache
+from vector_embed_cache import embed, EmbeddingCache
 
 # Simple function API (uses global singleton)
 embedding = embed("Hello, world!")

@@ -7,7 +7,7 @@ import sys
 def test_cli_stats_command():
     """CLI stats command should run without error."""
     result = subprocess.run(
-        [sys.executable, "-m", "embedding_cache.cli", "stats"],
+        [sys.executable, "-m", "vector_embed_cache.cli", "stats"],
         capture_output=True,
         text=True,
     )
@@ -18,7 +18,7 @@ def test_cli_stats_command():
 def test_cli_info_command():
     """CLI info command should show cache location."""
     result = subprocess.run(
-        [sys.executable, "-m", "embedding_cache.cli", "info"],
+        [sys.executable, "-m", "vector_embed_cache.cli", "info"],
         capture_output=True,
         text=True,
     )
@@ -29,7 +29,7 @@ def test_cli_info_command():
 def test_cli_help():
     """CLI should show help."""
     result = subprocess.run(
-        [sys.executable, "-m", "embedding_cache.cli", "--help"],
+        [sys.executable, "-m", "vector_embed_cache.cli", "--help"],
         capture_output=True,
         text=True,
     )

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Batch processing example for large datasets."""
 
-from embedding_cache import EmbeddingCache
+from vector_embed_cache import EmbeddingCache
 
 # Sample dataset
 texts = [

@@ -10,8 +10,8 @@ Run with: pytest tests/test_integration.py -v -m integration
 import pytest
 import numpy as np
 
-from embedding_cache.cache import EmbeddingCache
-from embedding_cache.providers import LocalProvider
+from vector_embed_cache.cache import EmbeddingCache
+from vector_embed_cache.providers import LocalProvider
 
 
 @pytest.mark.integration

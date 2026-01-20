@@ -3,7 +3,7 @@
 import pytest
 import numpy as np
 
-from embedding_cache.cache import EmbeddingCache
+from vector_embed_cache.cache import EmbeddingCache
 
 
 def test_all_providers_fail(temp_cache_dir, mocker):

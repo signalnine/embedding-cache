@@ -2,7 +2,7 @@
 
 import numpy as np
 from pathlib import Path
-from embedding_cache.storage import EmbeddingStorage
+from vector_embed_cache.storage import EmbeddingStorage
 
 
 def test_storage_init_creates_database(temp_cache_dir):

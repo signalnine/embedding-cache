@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock
 
-from embedding_cache.cache import EmbeddingCache
+from vector_embed_cache.cache import EmbeddingCache
 
 
 def test_cache_init_creates_storage():
@@ -200,8 +200,8 @@ def test_all_providers_fail():
 
 def test_cache_selects_openai_provider():
     """Should select OpenAIProvider when model starts with 'openai:'."""
-    from embedding_cache import EmbeddingCache
-    from embedding_cache.providers import OpenAIProvider
+    from vector_embed_cache import EmbeddingCache
+    from vector_embed_cache.providers import OpenAIProvider
 
     cache = EmbeddingCache(model="openai:text-embedding-3-small")
 
@@ -211,8 +211,8 @@ def test_cache_selects_openai_provider():
 
 def test_cache_selects_local_provider_for_nomic():
     """Should select LocalProvider for nomic models."""
-    from embedding_cache import EmbeddingCache
-    from embedding_cache.providers import LocalProvider
+    from vector_embed_cache import EmbeddingCache
+    from vector_embed_cache.providers import LocalProvider
 
     cache = EmbeddingCache(model="nomic-ai/nomic-embed-text-v1.5")
 

@@ -11,7 +11,7 @@ A Python library and self-hosted backend for caching embedding vectors. Eliminat
 
 🚀 **Local SQLite cache for zero-latency lookups** - Cache all embeddings in a local database for instant retrieval
 
-🔄 **Smart fallback chain: local model → remote backend** - Automatically falls back to remote if local fails
+🔄 **Smart fallback chain: local model → remote backend** - Uses remote when local fails
 
 💰 **Zero API costs using nomic-embed-text-v1.5** - Run embeddings locally with open-source models
 
@@ -24,29 +24,29 @@ A Python library and self-hosted backend for caching embedding vectors. Eliminat
 ## Why vector-embed-cache?
 
 ### vs RedisVL / Remote Caches
-- **No Redis setup required** - Just SQLite, no external dependencies
-- **Works offline** - Local model runs without internet
-- **Zero network latency** - Cache lookups are disk reads, not network calls
+- **No Redis setup** - SQLite only, no external dependencies
+- **Works offline** - Local model needs no internet
+- **Zero network latency** - Cache lookups read disk, not network
 - **Computes embeddings** - Built-in model support, not just caching
 
 ### vs GPTCache / Semantic Caches
 - **Exact matching** - Deterministic cache keys, no similarity search needed
 - **Simpler setup** - Single SQLite file vs vector stores + embedding + eviction
-- **Text normalization** - "Hello" and "hello" share the same cache entry
-- **Embedding-focused** - Designed for vectors, not LLM response caching
+- **Text normalization** - "Hello" and "hello" share one cache entry
+- **Embedding-focused** - Built for vectors, not LLM response caching
 
 ### vs Generic Caches (diskcache, cachew)
 - **Embedding-aware** - Automatic normalization and provider fallback
-- **Stats tracking** - Built-in monitoring for cache hits/misses
+- **Stats tracking** - Built-in hit/miss monitoring
 - **Smart fallback** - Local model → remote backend → error
-- **Zero config** - Works out of the box with sensible defaults
+- **Zero config** - Works out of the box
 
 ### When to use vector-embed-cache
-✅ Prototyping with embeddings locally
-✅ Reducing API costs for embedding computation
-✅ Offline or air-gapped environments
-✅ Projects that need fallback to remote compute
-✅ Simple single-file cache without infrastructure
+✅ Prototype embeddings locally
+✅ Cut API costs
+✅ Work offline or air-gapped
+✅ Fall back to remote compute
+✅ Cache in a single file
 
 ### When to use alternatives
 - Need semantic similarity matching → **GPTCache**
@@ -113,15 +113,15 @@ print(cache.stats)
 ```
 
 The OpenAI provider:
-- Uses the OpenAI API with automatic retries
-- Caches embeddings locally just like other providers
-- Requires `OPENAI_API_KEY` environment variable
-- Supports batch embedding (up to 2048 texts per request)
+- Calls the OpenAI API with automatic retries
+- Caches embeddings locally like other providers
+- Requires `OPENAI_API_KEY`
+- Batches up to 2048 texts per request
 - Returns 1536-dimensional embeddings for text-embedding-3-small
 
 ## Model Comparison
 
-embedding-cache supports multiple embedding models. Here's how they compare:
+embedding-cache supports multiple embedding models:
 
 | Model | Dimensions | Provider | Cost | Speed | Use Case |
 |-------|-----------|----------|------|-------|----------|
@@ -144,13 +144,13 @@ cache_v2 = EmbeddingCache(model="nomic-ai/nomic-embed-text-v2-moe")
 cache_openai = EmbeddingCache(model="openai:text-embedding-3-small")
 ```
 
-All models benefit from the same caching layer, so repeated queries are instant regardless of which model you choose.
+All models share the same cache, so repeated queries return instantly.
 
 ## Quick Start
 
 ### Simple Function API
 
-The simplest way to use embedding-cache is with the `embed()` function:
+Use the `embed()` function:
 
 ```python
 from vector_embed_cache import embed
@@ -167,7 +167,7 @@ print(vectors[0].shape)  # (768,)
 
 ### Advanced Class-Based API
 
-For more control over configuration, use the `EmbeddingCache` class:
+For finer control, use the `EmbeddingCache` class:
 
 ```python
 from vector_embed_cache import EmbeddingCache
@@ -214,11 +214,11 @@ By default, embeddings are cached in:
 - Linux/macOS: `~/.cache/embedding-cache/`
 - Windows: `C:\Users\<username>\.cache\embedding-cache\`
 
-Override with `EMBEDDING_CACHE_DIR` environment variable or the `cache_dir` parameter.
+Override with `EMBEDDING_CACHE_DIR` or the `cache_dir` parameter.
 
 ### Override Methods
 
-You can override cache behavior using the `EmbeddingCache` constructor:
+Override cache behavior in the `EmbeddingCache` constructor:
 
 ```python
 cache = EmbeddingCache(
@@ -234,12 +234,12 @@ cache = EmbeddingCache(
 
 ### Caching Flow
 
-1. **Input Normalization**: Text is normalized (whitespace, lowercasing) to maximize cache hits
-2. **Cache Key Generation**: SHA-256 hash generated from (normalized_text + model_name)
-3. **Cache Lookup**: Check SQLite database for existing embedding
-4. **Cache Hit**: Return cached embedding immediately (zero latency)
-5. **Cache Miss**: Generate embedding using fallback chain
-6. **Cache Store**: Save new embedding to SQLite for future lookups
+1. **Input Normalization**: Normalize text (whitespace, lowercasing) to maximize cache hits
+2. **Cache Key Generation**: Hash (normalized_text + model_name) with SHA-256
+3. **Cache Lookup**: Check SQLite for existing embedding
+4. **Cache Hit**: Return cached embedding (zero latency)
+5. **Cache Miss**: Generate embedding via fallback chain
+6. **Cache Store**: Save embedding to SQLite
 
 ### Models
 
@@ -311,7 +311,7 @@ open htmlcov/index.html  # macOS
 
 ## Error Handling
 
-The library provides clear error messages for common issues:
+The library raises clear errors:
 
 - **ValueError**: Empty string or None input
   ```python
@@ -337,23 +337,23 @@ MIT License - see LICENSE file for details.
 
 ## Contributing
 
-Contributions are welcome! Here's how to contribute:
+Contributions welcome:
 
-1. **Fork the repository** on GitHub
-2. **Create a feature branch**: `git checkout -b feature/my-new-feature`
-3. **Make your changes** and add tests
-4. **Run the test suite**: `pytest tests/`
-5. **Submit a pull request** with a clear description of your changes
+1. **Fork** the repository
+2. **Create a branch**: `git checkout -b feature/my-new-feature`
+3. **Add tests** for your changes
+4. **Run tests**: `pytest tests/`
+5. **Submit a PR** with clear description
 
-Please ensure your code:
-- Passes all existing tests
-- Includes tests for new functionality
-- Follows the existing code style
-- Includes docstrings for new functions/classes
+Your code should:
+- Pass all tests
+- Include tests for new functionality
+- Follow existing style
+- Include docstrings for new functions/classes
 
 ## Self-Hosted Backend
 
-For teams needing centralized caching with multi-tenant support, see the [server documentation](server/README.md).
+For centralized multi-tenant caching, see the [server documentation](server/README.md).
 
 **Features:**
 - Multi-tenant embedding cache with PostgreSQL

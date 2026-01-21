@@ -7,6 +7,9 @@ Score Calculation:
 - We convert to 0-1 scale: (-(raw_distance) + 1) / 2
 """
 
+from dataclasses import dataclass
+from typing import Optional, Any
+
 SUPPORTED_DIMENSIONS = {768, 1536, 384}
 
 # Model name -> expected dimensions mapping
@@ -56,3 +59,72 @@ def validate_dimensions(dimensions: int) -> None:
             f"Unsupported dimension {dimensions}. "
             f"Supported: {sorted(SUPPORTED_DIMENSIONS)}"
         )
+
+
+@dataclass
+class SearchParams:
+    query_vector: list[float]
+    tenant_id: str
+    model: str
+    dimensions: int
+    top_k: int
+    min_score: Optional[float]
+
+
+async def similarity_search(db: Any, params: SearchParams) -> list[dict]:
+    """
+    Execute similarity search using pgvector HNSW index.
+
+    Args:
+        db: Database connection with transaction() and fetch() methods
+        params: Search parameters
+
+    Returns:
+        List of matching embeddings with scores
+
+    Raises:
+        ValueError: If dimensions not supported
+    """
+    validate_dimensions(params.dimensions)
+
+    # SAFETY: dimensions is validated against SUPPORTED_DIMENSIONS whitelist above
+    # pgvector ::vector(N) cast requires literal integer, cannot use $param
+    # This is safe because validate_dimensions() only allows known integers
+    dim = params.dimensions
+    assert dim in SUPPORTED_DIMENSIONS, "Dimension bypass attempt"
+
+    async with db.transaction():
+        await db.execute("SET LOCAL hnsw.ef_search = 40")
+
+        # Build query with dimension-specific casts for partial index
+        # The ::vector(N) casts are REQUIRED to use the partial HNSW index
+        # Note: dim is safe to interpolate (validated integer from whitelist)
+        query = f"""
+            SELECT
+                text_hash,
+                original_text,
+                model,
+                (-(vector::vector({dim}) <#> $1::vector({dim})) + 1) / 2 as score,
+                hit_count
+            FROM embeddings
+            WHERE tenant_id = $2
+              AND dimensions = $5
+              AND model = $3
+            ORDER BY vector::vector({dim}) <#> $1::vector({dim})
+            LIMIT $4
+        """
+
+        results = await db.fetch(
+            query,
+            params.query_vector,
+            params.tenant_id,
+            params.model,
+            params.top_k,
+            params.dimensions  # $5 - parameterized for WHERE clause
+        )
+
+    # Apply min_score filter if specified (post-query for simplicity)
+    if params.min_score is not None:
+        results = [r for r in results if r['score'] >= params.min_score]
+
+    return results

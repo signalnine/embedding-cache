@@ -1,5 +1,6 @@
 import pytest
-from app.similarity import calculate_similarity_score, SUPPORTED_DIMENSIONS
+from unittest.mock import AsyncMock, MagicMock
+from app.similarity import calculate_similarity_score, SUPPORTED_DIMENSIONS, similarity_search, SearchParams
 
 
 class TestScoreCalculation:
@@ -37,3 +38,67 @@ class TestSupportedDimensions:
 
     def test_3072_not_supported(self):
         assert 3072 not in SUPPORTED_DIMENSIONS
+
+
+class TestSimilaritySearch:
+    @pytest.mark.asyncio
+    async def test_search_builds_correct_query(self):
+        # Mock database connection
+        mock_db = AsyncMock()
+        mock_db.fetch = AsyncMock(return_value=[
+            {
+                "text_hash": "abc123",
+                "original_text": "hello world",
+                "model": "nomic-v1.5",
+                "score": 0.92,
+                "hit_count": 5
+            }
+        ])
+
+        # Mock transaction context manager
+        mock_transaction = AsyncMock()
+        mock_transaction.__aenter__ = AsyncMock(return_value=mock_transaction)
+        mock_transaction.__aexit__ = AsyncMock(return_value=None)
+        mock_db.transaction = MagicMock(return_value=mock_transaction)
+
+        params = SearchParams(
+            query_vector=[0.1] * 768,
+            tenant_id="tenant-123",
+            model="nomic-v1.5",
+            dimensions=768,
+            top_k=10,
+            min_score=None
+        )
+
+        results = await similarity_search(mock_db, params)
+
+        # Verify SET LOCAL was called
+        mock_db.execute.assert_called()
+        call_args = str(mock_db.execute.call_args)
+        assert "SET LOCAL hnsw.ef_search" in call_args
+
+        # Verify query structure
+        fetch_call = mock_db.fetch.call_args
+        query = fetch_call[0][0]
+        assert "vector::vector(768)" in query
+        assert "dimensions" in query
+        assert "tenant_id" in query
+        assert "ORDER BY" in query
+        assert "LIMIT" in query
+
+    @pytest.mark.asyncio
+    async def test_search_rejects_unsupported_dimensions(self):
+        mock_db = AsyncMock()
+
+        params = SearchParams(
+            query_vector=[0.1] * 3072,
+            tenant_id="tenant-123",
+            model="unknown-model",
+            dimensions=3072,
+            top_k=10,
+            min_score=None
+        )
+
+        with pytest.raises(ValueError) as exc:
+            await similarity_search(mock_db, params)
+        assert "Unsupported dimension" in str(exc.value)

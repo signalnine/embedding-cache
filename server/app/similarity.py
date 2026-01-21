@@ -7,6 +7,7 @@ Score Calculation:
 - We convert to 0-1 scale: (-(raw_distance) + 1) / 2
 """
 
+import math
 from dataclasses import dataclass
 from typing import Optional, Any
 
@@ -61,6 +62,32 @@ def validate_dimensions(dimensions: int) -> None:
         )
 
 
+def validate_vector_normalization(vector: list[float], tolerance: float = 0.01) -> None:
+    """
+    Validate that vector is L2-normalized (unit length).
+
+    Inner product similarity only equals cosine similarity for normalized vectors.
+    This validation ensures score calculations are meaningful.
+
+    Args:
+        vector: The vector to validate
+        tolerance: Allowed deviation from unit length (default 0.01)
+
+    Raises:
+        ValueError: If vector is not normalized
+    """
+    norm = math.sqrt(sum(x * x for x in vector))
+
+    if norm < tolerance:
+        raise ValueError("Vector is zero or near-zero length")
+
+    if abs(norm - 1.0) > tolerance:
+        raise ValueError(
+            f"Vector must be L2-normalized. Got norm={norm:.4f}, expected 1.0. "
+            f"Normalize with: vector / np.linalg.norm(vector)"
+        )
+
+
 @dataclass
 class SearchParams:
     query_vector: list[float]
@@ -83,9 +110,10 @@ async def similarity_search(db: Any, params: SearchParams) -> list[dict]:
         List of matching embeddings with scores
 
     Raises:
-        ValueError: If dimensions not supported
+        ValueError: If dimensions not supported or vector not normalized
     """
     validate_dimensions(params.dimensions)
+    validate_vector_normalization(params.query_vector)
 
     # SAFETY: dimensions is validated against SUPPORTED_DIMENSIONS whitelist above
     # pgvector ::vector(N) cast requires literal integer, cannot use $param

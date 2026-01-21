@@ -1,6 +1,19 @@
+import math
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.similarity import calculate_similarity_score, SUPPORTED_DIMENSIONS, similarity_search, SearchParams
+from app.similarity import (
+    calculate_similarity_score,
+    SUPPORTED_DIMENSIONS,
+    similarity_search,
+    SearchParams,
+    validate_vector_normalization,
+)
+
+
+def make_normalized_vector(dimensions: int) -> list[float]:
+    """Create a normalized unit vector of given dimensions."""
+    component = 1.0 / math.sqrt(dimensions)
+    return [component] * dimensions
 
 
 class TestScoreCalculation:
@@ -62,7 +75,7 @@ class TestSimilaritySearch:
         mock_db.transaction = MagicMock(return_value=mock_transaction)
 
         params = SearchParams(
-            query_vector=[0.1] * 768,
+            query_vector=make_normalized_vector(768),
             tenant_id="tenant-123",
             model="nomic-v1.5",
             dimensions=768,
@@ -102,3 +115,25 @@ class TestSimilaritySearch:
         with pytest.raises(ValueError) as exc:
             await similarity_search(mock_db, params)
         assert "Unsupported dimension" in str(exc.value)
+
+
+class TestVectorNormalization:
+    def test_accepts_normalized_vector(self):
+        vec = [1.0, 0.0, 0.0]  # Unit vector
+        validate_vector_normalization(vec)  # Should not raise
+
+    def test_accepts_approximately_normalized(self):
+        # Normalized within tolerance
+        vec = [0.577, 0.577, 0.577]  # ~unit vector
+        validate_vector_normalization(vec)  # Should not raise
+
+    def test_rejects_unnormalized_vector(self):
+        vec = [1.0, 1.0, 1.0]  # norm = sqrt(3) ~ 1.73
+        with pytest.raises(ValueError) as exc:
+            validate_vector_normalization(vec)
+        assert "normalized" in str(exc.value).lower()
+
+    def test_rejects_zero_vector(self):
+        vec = [0.0, 0.0, 0.0]
+        with pytest.raises(ValueError):
+            validate_vector_normalization(vec)

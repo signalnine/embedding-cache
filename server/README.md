@@ -230,6 +230,68 @@ Authorization: Bearer <api_key>
 }
 ```
 
+### Similarity Search
+
+Search for semantically similar cached embeddings using pgvector.
+
+#### Endpoint
+
+`POST /v1/search`
+
+#### Request
+
+```json
+{
+  "query_text": "find similar text",
+  "query_vector": [0.1, 0.2, "..."],
+  "model": "nomic-v1.5",
+  "top_k": 10,
+  "min_score": 0.5,
+  "include_vectors": false,
+  "include_text": true
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `query_text` | string | One of text/vector | Text to search for (will be embedded) |
+| `query_vector` | array | One of text/vector | Pre-computed embedding vector |
+| `model` | string | Yes | Model name for embedding lookup |
+| `top_k` | integer | No | Number of results (default 10, max 100) |
+| `min_score` | float | No | Minimum similarity score (0-1 range) |
+| `include_vectors` | boolean | No | Include embedding vectors in response (default false) |
+| `include_text` | boolean | No | Include original text in response (default true) |
+
+**Note:** `query_text` and `query_vector` are mutually exclusive. Provide exactly one.
+
+#### Response
+
+```json
+{
+  "results": [
+    {
+      "text_hash": "abc123...",
+      "score": 0.92,
+      "text": "original cached text",
+      "model": "nomic-v1.5",
+      "hit_count": 5
+    }
+  ],
+  "total": 1,
+  "search_time_ms": 12,
+  "model": "nomic-v1.5",
+  "dimensions": 768
+}
+```
+
+#### Supported Models
+
+| Model | Dimensions |
+|-------|-----------|
+| nomic-ai/nomic-embed-text-v1.5 | 768 |
+| openai:text-embedding-3-small | 1536 |
+| all-MiniLM-L6-v2 | 384 |
+
 ### Health & Metrics
 
 #### Health Check

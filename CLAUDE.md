@@ -163,6 +163,12 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - **Rate Limiting**: Redis-based daily counters (gracefully degrades without Redis)
 - **Composite Primary Key**: (text_hash, model, model_version, tenant_id) for versioned caching
 
+**Similarity Search (pgvector):**
+- Hash-partitioned embeddings table (32 partitions by tenant_id)
+- Partial HNSW indexes per dimension (768, 1536, 384)
+- Inner product distance with 0-1 normalized scores
+- Multi-tenant isolation via API key
+
 ## Server Database Models
 
 | Model | Purpose |

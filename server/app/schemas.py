@@ -1,7 +1,7 @@
 # server/app/schemas.py
-from typing import Any
+from typing import Any, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 # Auth schemas
@@ -83,3 +83,39 @@ class StatsResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     version: str
+
+
+# Search schemas
+class SearchRequest(BaseModel):
+    query_text: Optional[str] = None
+    query_vector: Optional[list[float]] = None
+    model: str
+    top_k: int = Field(default=10, ge=1, le=100)
+    min_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    include_vectors: bool = False
+    include_text: bool = True
+
+    @model_validator(mode="after")
+    def validate_query(self):
+        if self.query_text is not None and self.query_vector is not None:
+            raise ValueError("query_text and query_vector are mutually exclusive")
+        if self.query_text is None and self.query_vector is None:
+            raise ValueError("Either query_text or query_vector is required")
+        return self
+
+
+class SearchResult(BaseModel):
+    text_hash: str
+    score: float
+    text: Optional[str] = None
+    vector: Optional[list[float]] = None
+    model: str
+    hit_count: int = 0
+
+
+class SearchResponse(BaseModel):
+    results: list[SearchResult]
+    total: int
+    search_time_ms: int
+    model: str
+    dimensions: int

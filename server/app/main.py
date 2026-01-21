@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app
 from app.database import engine, Base
 from app.redis_client import close_redis
-from app.routes import users, embed, providers
+from app.routes import users, embed, providers, search
 from app.schemas import HealthResponse
 from app.config import settings
 
@@ -44,6 +44,7 @@ app.include_router(users.router)
 app.include_router(users.keys_router)
 app.include_router(embed.router)
 app.include_router(providers.router)
+app.include_router(search.router)
 
 
 @app.get("/v1/health", response_model=HealthResponse)

@@ -357,6 +357,7 @@ For teams needing centralized caching with multi-tenant support, see the [server
 
 **Features:**
 - Multi-tenant embedding cache with PostgreSQL
+- Similarity search via pgvector (HNSW indexes)
 - Hybrid compute: BYOK (free tier) or server GPU (paid tier)
 - JWT authentication with API keys
 - Rate limiting with Redis
@@ -381,9 +382,9 @@ uvicorn app.main:app --port 8000
 - [x] BYOK provider support for free tier
 - [x] JWT authentication and API keys
 - [x] Rate limiting with Redis
+- [x] Similarity search on cached embeddings (pgvector)
 
 ### Future
-- [ ] Similarity search on cached embeddings (pgvector)
 - [ ] Pre-seeded common phrases/words
 - [ ] Client libraries (JavaScript, Go)
 - [ ] Admin dashboard

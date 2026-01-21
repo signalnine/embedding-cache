@@ -60,6 +60,7 @@ server/                      # Hosted backend (FastAPI)
 │   ├── config.py            # Pydantic settings
 │   ├── models.py            # SQLAlchemy ORM models
 │   ├── schemas.py           # Pydantic request/response schemas
+│   ├── similarity.py        # pgvector similarity search logic
 │   ├── auth.py              # JWT + bcrypt authentication
 │   ├── crypto.py            # Fernet encryption for API keys
 │   ├── database.py          # Database connection
@@ -72,11 +73,15 @@ server/                      # Hosted backend (FastAPI)
 │   └── routes/
 │       ├── users.py         # Auth endpoints
 │       ├── embed.py         # Embedding endpoints
-│       └── providers.py     # Provider config endpoints
-├── tests/                   # Server unit tests (35 tests)
+│       ├── providers.py     # Provider config endpoints
+│       └── search.py        # Similarity search endpoint
+├── tests/                   # Server unit tests (68 tests)
 ├── alembic/                 # Database migrations
 ├── scripts/
-│   └── seed.py              # Pre-seeding script
+│   ├── seed.py              # Pre-seeding script
+│   ├── create_hnsw_indexes.py   # pgvector HNSW index creation
+│   ├── migrate_to_pgvector.py   # Data migration with checkpointing
+│   └── swap_tables.py           # Atomic table cutover
 └── requirements.txt         # Server dependencies
 
 tests/                       # Library unit tests
@@ -196,9 +201,9 @@ The library is tested with [semantic-tarot](../semantic-tarot/), which uses it f
 - [x] BYOK provider support
 - [x] JWT authentication
 - [x] Rate limiting
+- [x] Similarity search on cached embeddings (pgvector)
 
 ### Future
-- [ ] Similarity search on cached embeddings (pgvector)
 - [ ] Pre-seeded common phrases/words
 - [ ] Client libraries (JS, Go)
 - [ ] Admin dashboard

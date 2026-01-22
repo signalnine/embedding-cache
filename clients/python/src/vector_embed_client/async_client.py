@@ -1,10 +1,10 @@
-"""Sync Client for vector-embed-cache API."""
+"""Async Client for vector-embed-cache API."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-import time
 from types import TracebackType
 from typing import Any
 
@@ -27,12 +27,12 @@ from vector_embed_client.types import (
 logger = logging.getLogger(__name__)
 
 
-class Client:
-    """Synchronous client for vector-embed-cache API.
+class AsyncClient:
+    """Asynchronous client for vector-embed-cache API.
 
     Usage:
-        with Client(api_key="your-api-key") as client:
-            response = client.embed("hello world")
+        async with AsyncClient(api_key="your-api-key") as client:
+            response = await client.embed("hello world")
             print(response.vector)
 
     Args:
@@ -51,7 +51,7 @@ class Client:
         timeout: float = 30.0,
         retries: int = 3,
     ) -> None:
-        """Initialize the client."""
+        """Initialize the async client."""
         resolved_api_key = api_key or os.environ.get("VECTOR_EMBED_API_KEY")
         if not resolved_api_key:
             msg = "API key required. Provide api_key or set VECTOR_EMBED_API_KEY env var."
@@ -62,29 +62,29 @@ class Client:
         self._model = model
         self._timeout = timeout
         self._retries = retries
-        self._http_client = httpx.Client(
+        self._http_client = httpx.AsyncClient(
             timeout=timeout,
             headers=build_headers(self._api_key),
         )
 
-    def __enter__(self) -> Client:
-        """Enter context manager."""
+    async def __aenter__(self) -> AsyncClient:
+        """Enter async context manager."""
         return self
 
-    def __exit__(
+    async def __aexit__(
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
-        """Exit context manager."""
-        self.close()
+        """Exit async context manager."""
+        await self.close()
 
-    def close(self) -> None:
+    async def close(self) -> None:
         """Close the HTTP client."""
-        self._http_client.close()
+        await self._http_client.aclose()
 
-    def _request(
+    async def _request(
         self,
         method: str,
         path: str,
@@ -110,7 +110,7 @@ class Client:
 
         for attempt in range(self._retries + 1):
             try:
-                response = self._http_client.request(method, url, json=json)
+                response = await self._http_client.request(method, url, json=json)
 
                 if response.status_code >= 400:
                     try:
@@ -133,7 +133,7 @@ class Client:
                                 self._retries,
                                 str(error),
                             )
-                            time.sleep(delay)
+                            await asyncio.sleep(delay)
                             continue
                     # Non-retryable error, raise immediately
                     raise error
@@ -152,7 +152,7 @@ class Client:
                         attempt + 1,
                         self._retries,
                     )
-                    time.sleep(delay)
+                    await asyncio.sleep(delay)
                     continue
                 raise last_error from e
 
@@ -168,7 +168,7 @@ class Client:
                         attempt + 1,
                         self._retries,
                     )
-                    time.sleep(delay)
+                    await asyncio.sleep(delay)
                     continue
                 raise last_error from e
 
@@ -178,7 +178,7 @@ class Client:
         # This should never happen, but satisfy type checker
         raise RuntimeError("Unexpected state: no error but request did not succeed")
 
-    def embed(self, text: str, *, model: str | None = None) -> EmbedResponse:
+    async def embed(self, text: str, *, model: str | None = None) -> EmbedResponse:
         """Compute embedding for a single text.
 
         Args:
@@ -188,7 +188,7 @@ class Client:
         Returns:
             EmbedResponse with vector, cached status, and dimensions.
         """
-        response = self._request(
+        response = await self._request(
             "POST",
             "/v1/embed",
             json={
@@ -202,7 +202,9 @@ class Client:
             dimensions=response["dimensions"],
         )
 
-    def embed_batch(self, texts: list[str], *, model: str | None = None) -> list[EmbedResponse]:
+    async def embed_batch(
+        self, texts: list[str], *, model: str | None = None
+    ) -> list[EmbedResponse]:
         """Compute embeddings for multiple texts.
 
         Args:
@@ -212,7 +214,7 @@ class Client:
         Returns:
             List of EmbedResponse objects.
         """
-        response = self._request(
+        response = await self._request(
             "POST",
             "/v1/embed/batch",
             json={
@@ -229,7 +231,7 @@ class Client:
             for item in response
         ]
 
-    def search(
+    async def search(
         self,
         text: str,
         *,
@@ -248,7 +250,7 @@ class Client:
         Returns:
             SearchResponse with results and metadata.
         """
-        response = self._request(
+        response = await self._request(
             "POST",
             "/v1/search",
             json={
@@ -274,13 +276,13 @@ class Client:
             search_time_ms=response["search_time_ms"],
         )
 
-    def stats(self) -> StatsResponse:
+    async def stats(self) -> StatsResponse:
         """Get cache statistics.
 
         Returns:
             StatsResponse with cache hit/miss counts.
         """
-        response = self._request("GET", "/v1/stats")
+        response = await self._request("GET", "/v1/stats")
         return StatsResponse(
             cache_hits=response["cache_hits"],
             cache_misses=response["cache_misses"],

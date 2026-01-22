@@ -41,3 +41,6 @@ htmlcov/
 .cache/
 *.db
 *.db-journal
+
+# But include the preseed database (bundled with package)
+!vector_embed_cache/data/preseed_*.db

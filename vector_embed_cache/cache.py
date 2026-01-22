@@ -123,19 +123,27 @@ class EmbeddingCache:
         # Generate cache key
         cache_key = generate_cache_key(normalized, self.model)
 
-        # Check cache
+        # Check user cache first
         cached = self.storage.get(cache_key)
         if cached is not None:
             with self._stats_lock:
                 self.stats["hits"] += 1
             return cached
 
+        # Check preseed cache (fallback)
+        if self.preseed_storage is not None:
+            preseed_result = self.preseed_storage.get(cache_key)
+            if preseed_result is not None:
+                with self._stats_lock:
+                    self.stats["preseed_hits"] += 1
+                return preseed_result
+
         # Cache miss - compute embedding
         with self._stats_lock:
             self.stats["misses"] += 1
         embedding = self._compute_embedding(normalized)
 
-        # Store in cache
+        # Store in user cache
         self.storage.set(cache_key, self.model, embedding)
 
         return embedding

@@ -143,3 +143,56 @@ class TestPreseedIntegration:
         # Check that stats dict has preseed_hits key
         assert "preseed_hits" in cache.stats
         assert cache.stats["preseed_hits"] == 0
+
+    def test_preseed_lookup_returns_cached_embedding(self, tmp_path):
+        """Test that preseed DB is checked and returns embeddings."""
+        from vector_embed_cache.cache import EmbeddingCache
+        from vector_embed_cache.preseed import PreseedStorage
+        from vector_embed_cache.utils import generate_cache_key
+        from vector_embed_cache.normalize import normalize_text
+
+        # Create preseed DB with known word
+        db_path = tmp_path / "preseed.db"
+        conn = sqlite3.connect(db_path)
+        conn.execute("""
+            CREATE TABLE embeddings (
+                cache_key TEXT PRIMARY KEY,
+                model TEXT NOT NULL,
+                embedding BLOB NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)
+        """)
+
+        # Generate cache key for "hello" with the default model
+        model = "nomic-ai/nomic-embed-text-v1.5"
+        normalized = normalize_text("hello")
+        cache_key = generate_cache_key(normalized, model)
+
+        # Insert embedding for "hello"
+        test_embedding = np.ones(768, dtype=np.float32) * 0.5
+        embedding_bytes = msgpack.packb(test_embedding.tolist())
+        conn.execute(
+            "INSERT INTO embeddings (cache_key, model, embedding) VALUES (?, ?, ?)",
+            (cache_key, model, embedding_bytes)
+        )
+        conn.commit()
+        conn.close()
+
+        # Create cache without preseed (default behavior)
+        cache = EmbeddingCache(
+            cache_dir=str(tmp_path / "user_cache"),
+            model=model
+        )
+
+        # Manually inject preseed storage with our test DB
+        cache.preseed_storage = PreseedStorage(db_path)
+
+        # This should find "hello" in preseed and return it
+        result = cache.embed("hello")
+
+        assert result is not None
+        assert cache.stats["preseed_hits"] == 1
+        assert cache.stats["misses"] == 0  # Not a miss if found in preseed
+        np.testing.assert_array_almost_equal(result, test_embedding)

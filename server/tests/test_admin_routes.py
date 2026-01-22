@@ -45,7 +45,7 @@ def client():
 
 @pytest.fixture
 def test_user(client):
-    """Create a test user in the database."""
+    """Create a test admin user in the database."""
     db = TestSessionLocal()
     # Clean up any existing user with this email
     existing = db.query(User).filter(User.email == "testadmin@example.com").first()
@@ -59,6 +59,40 @@ def test_user(client):
         password_hash=hash_password("testpass123"),
         tier="paid",
         is_admin=True
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    user_id = user.id  # Store before closing session
+    db.close()
+
+    yield user
+
+    # Cleanup
+    db = TestSessionLocal()
+    user_to_delete = db.query(User).filter(User.id == user_id).first()
+    if user_to_delete:
+        db.delete(user_to_delete)
+        db.commit()
+    db.close()
+
+
+@pytest.fixture
+def non_admin_user(client):
+    """Create a non-admin test user in the database."""
+    db = TestSessionLocal()
+    # Clean up any existing user with this email
+    existing = db.query(User).filter(User.email == "nonadmin@example.com").first()
+    if existing:
+        db.delete(existing)
+        db.commit()
+
+    user = User(
+        id=str(uuid.uuid4()),
+        email="nonadmin@example.com",
+        password_hash=hash_password("testpass123"),
+        tier="free",
+        is_admin=False
     )
     db.add(user)
     db.commit()
@@ -125,3 +159,19 @@ class TestProtectedRoutes:
         response = client.get("/admin/", headers={"HX-Request": "true"})
         assert response.status_code == 200
         assert response.headers.get("HX-Redirect") == "/admin/login/"
+
+    def test_non_admin_can_access_dashboard(self, client, non_admin_user):
+        """Non-admin users should be able to access the dashboard (they see their own stats)."""
+        # Login as non-admin user
+        login_response = client.post("/admin/login/", data={
+            "email": "nonadmin@example.com",
+            "password": "testpass123"
+        }, follow_redirects=False)
+        assert login_response.status_code == 302
+        assert "auth_token" in login_response.cookies
+
+        # Access dashboard with auth cookie
+        dashboard_response = client.get("/admin/", cookies=login_response.cookies)
+        assert dashboard_response.status_code == 200
+        # Should show dashboard content, not redirect to login
+        assert "Dashboard" in dashboard_response.text or "dashboard" in dashboard_response.text.lower()

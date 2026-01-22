@@ -1,0 +1,77 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ target.email }}{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">User: {{ target.email }}</h1>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>{{ stats.total_embeddings }}</h3>
+        <p>Cached Embeddings</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{ "%.1f"|format(stats.hit_rate * 100) }}%</h3>
+        <p>Cache Hit Rate</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>User Info</h2>
+    <table>
+        <tr><th>Email</th><td>{{ target.email }}</td></tr>
+        <tr><th>Tier</th><td>{{ target.tier }}</td></tr>
+        <tr><th>Admin</th><td>{{ 'Yes' if target.is_admin else 'No' }}</td></tr>
+        <tr><th>Created</th><td>{{ target.created_at[:19] if target.created_at else '-' }}</td></tr>
+    </table>
+</div>
+
+<div class="card">
+    <h2>Usage (Last 30 Days)</h2>
+    <div id="usage-chart" style="height: 250px;"></div>
+</div>
+
+<div class="card">
+    <h2>API Keys</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Key Prefix</th>
+                <th>Created</th>
+                <th>Last Used</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for key in keys %}
+            <tr class="{{ 'revoked' if key.revoked_at else '' }}">
+                <td><code>{{ key.key_prefix }}...</code></td>
+                <td>{{ key.created_at[:10] if key.created_at else '-' }}</td>
+                <td>{{ key.last_used_at[:16] if key.last_used_at else 'Never' }}</td>
+                <td>{{ 'Revoked' if key.revoked_at else 'Active' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" style="text-align: center;">No API keys</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+{% if stats.chart_data.labels %}
+new frappe.Chart("#usage-chart", {
+    data: {
+        labels: {{ stats.chart_data.labels | tojson }},
+        datasets: {{ stats.chart_data.datasets | tojson }}
+    },
+    type: 'line',
+    colors: ['#22c55e', '#ef4444'],
+    axisOptions: { xAxisMode: 'tick' }
+});
+{% else %}
+document.getElementById('usage-chart').innerHTML = '<p style="padding: 2rem; text-align: center; color: #6b7280;">No data available</p>';
+{% endif %}
+</script>
+{% endblock %}

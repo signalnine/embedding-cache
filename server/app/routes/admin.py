@@ -467,3 +467,52 @@ async def revoke_api_key(
     return templates.TemplateResponse(request, "admin/api_key_row.html", {
         "key": updated_key
     })
+
+
+@router.get("/users/{user_id}/", response_class=HTMLResponse)
+async def user_detail(
+    request: Request,
+    user_id: str,
+    user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """View user details."""
+    # Non-admins can only view themselves
+    if not user.is_admin and user.id != user_id:
+        raise HTTPException(403, "Access denied")
+
+    csrf_token = generate_csrf_token(user.id)
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(404, "User not found")
+
+    # Get user's API keys
+    keys = db.execute(text("""
+        SELECT key_prefix, created_at, last_used_at, revoked_at
+        FROM api_keys
+        WHERE user_id = :user_id
+        ORDER BY created_at DESC
+    """), {"user_id": user_id}).fetchall()
+
+    # Get user's usage stats
+    start_date = date.today() - timedelta(days=30)
+    stats = get_dashboard_stats(db, user_id, is_admin=False)
+    stats["chart_data"] = get_usage_chart_data(db, start_date, user_id, is_admin=False)
+
+    return templates.TemplateResponse(request, "admin/user_detail.html", {
+        "user": user,
+        "csrf_token": csrf_token,
+        "target": target,
+        "keys": keys,
+        "stats": stats
+    })
+
+
+@router.get("/me/", response_class=HTMLResponse)
+async def my_profile(
+    request: Request,
+    user: User = Depends(get_current_admin_user)
+):
+    """Redirect to own user detail page."""
+    return RedirectResponse(f"/admin/users/{user.id}/", status_code=302)

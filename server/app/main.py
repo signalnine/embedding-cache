@@ -1,8 +1,12 @@
 # server/app/main.py
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from prometheus_client import make_asgi_app
+from starlette.middleware.sessions import SessionMiddleware
 from app.database import engine, Base
 from app.redis_client import close_redis
 from app.routes import users, embed, providers, search
@@ -34,6 +38,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Session middleware (for flash messages)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.jwt_secret,
+    session_cookie="admin_session",
+    max_age=1800,
+    same_site="lax",
+    https_only=False,  # Set True in production
+)
+
+# Static files
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
+
+# Templates
+templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 
 # Mount Prometheus metrics
 metrics_app = make_asgi_app()

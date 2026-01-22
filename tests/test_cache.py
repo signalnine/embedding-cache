@@ -71,6 +71,7 @@ def test_cache_embed_batch():
     """Test that cache handles list of texts."""
     with tempfile.TemporaryDirectory() as tmpdir:
         cache = EmbeddingCache(cache_dir=tmpdir)
+        cache.preseed_storage = None  # Disable preseed for this test
 
         # Mock embeddings for different texts
         embeddings_map = {
@@ -100,6 +101,7 @@ def test_cache_stats_tracking():
     """Test that cache tracks hits and misses."""
     with tempfile.TemporaryDirectory() as tmpdir:
         cache = EmbeddingCache(cache_dir=tmpdir)
+        cache.preseed_storage = None  # Disable preseed for this test
 
         test_embedding = np.array([0.1, 0.2, 0.3], dtype=np.float32)
         cache.local_provider.embed = Mock(return_value=test_embedding)
@@ -164,6 +166,7 @@ def test_remote_fallback_on_local_failure():
             remote_url="https://example.com",
             fallback_providers=["local", "remote"]
         )
+        cache.preseed_storage = None  # Disable preseed for this test
 
         # Set local provider to fail
         cache.local_provider.is_available = Mock(return_value=False)
@@ -189,6 +192,7 @@ def test_all_providers_fail():
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create cache without remote URL
         cache = EmbeddingCache(cache_dir=tmpdir, remote_url=None)
+        cache.preseed_storage = None  # Disable preseed for this test
 
         # Make local provider unavailable
         cache.local_provider.is_available = Mock(return_value=False)

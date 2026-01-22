@@ -14,6 +14,7 @@ def test_all_providers_fail(temp_cache_dir, mocker):
         remote_url="https://example.com",
         fallback_providers=["local", "remote"]
     )
+    cache.preseed_storage = None  # Disable preseed for this test
 
     # Mock both providers to fail
     mocker.patch.object(cache.local_provider, 'is_available', return_value=False)
@@ -81,6 +82,7 @@ def test_remote_fallback_on_local_failure(temp_cache_dir, mocker):
         remote_url="https://example.com",
         fallback_providers=["local", "remote"]
     )
+    cache.preseed_storage = None  # Disable preseed for this test
 
     # Mock local provider to raise RuntimeError
     mocker.patch.object(cache.local_provider, 'is_available', return_value=True)

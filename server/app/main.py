@@ -9,7 +9,7 @@ from prometheus_client import make_asgi_app
 from starlette.middleware.sessions import SessionMiddleware
 from app.database import engine, Base
 from app.redis_client import close_redis
-from app.routes import users, embed, providers, search
+from app.routes import users, embed, providers, search, admin
 from app.schemas import HealthResponse
 from app.config import settings
 
@@ -65,6 +65,7 @@ app.include_router(users.keys_router)
 app.include_router(embed.router)
 app.include_router(providers.router)
 app.include_router(search.router)
+app.include_router(admin.router)
 
 
 @app.get("/v1/health", response_model=HealthResponse)

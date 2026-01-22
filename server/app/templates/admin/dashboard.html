@@ -1,0 +1,44 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">Dashboard</h1>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>{{ stats.total_users }}</h3>
+        <p>Total Users</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{ stats.total_embeddings }}</h3>
+        <p>Cached Embeddings</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{ "%.1f"|format(stats.hit_rate * 100) }}%</h3>
+        <p>Cache Hit Rate</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Cache Activity (Last 30 Days)</h2>
+    <div id="activity-chart" style="height: 300px;"></div>
+</div>
+
+<script>
+{% if stats.chart_data.labels %}
+new frappe.Chart("#activity-chart", {
+    data: {
+        labels: {{ stats.chart_data.labels | tojson }},
+        datasets: {{ stats.chart_data.datasets | tojson }}
+    },
+    type: 'line',
+    colors: ['#22c55e', '#ef4444'],
+    axisOptions: { xAxisMode: 'tick' },
+    lineOptions: { regionFill: 1 }
+});
+{% else %}
+document.getElementById('activity-chart').innerHTML = '<p style="padding: 2rem; text-align: center; color: #6b7280;">No data available yet</p>';
+{% endif %}
+</script>
+{% endblock %}

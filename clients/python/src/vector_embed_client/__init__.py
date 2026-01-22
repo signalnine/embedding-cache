@@ -8,6 +8,12 @@ from vector_embed_client.errors import (
     ValidationError,
     VectorEmbedError,
 )
+from vector_embed_client.types import (
+    EmbedResponse,
+    SearchResponse,
+    SearchResult,
+    StatsResponse,
+)
 
 __version__ = "0.1.0"
 
@@ -18,4 +24,8 @@ __all__: list[str] = [
     "ValidationError",
     "ServerError",
     "NetworkError",
+    "EmbedResponse",
+    "SearchResult",
+    "SearchResponse",
+    "StatsResponse",
 ]

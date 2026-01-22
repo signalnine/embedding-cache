@@ -462,3 +462,27 @@ Rate limiting gracefully degrades without Redis. The server will continue to fun
 
 ### GPU not available
 Set `GPU_DEVICE=cpu` for CPU-only compute. Performance will be slower but functional.
+
+## Admin Dashboard
+
+The server includes a web-based admin dashboard at `/admin/`.
+
+### First-Time Setup
+
+Create an admin user:
+```bash
+python -m app.cli create-admin --email admin@example.com --password <secure-password>
+```
+
+### Features
+
+- **Dashboard**: Cache hit/miss stats, usage charts
+- **User Management** (admin only): List, search, change tier, toggle admin
+- **API Keys**: Create, view, revoke keys
+
+### Security
+
+- JWT cookie authentication (HttpOnly, Secure, SameSite)
+- CSRF protection for all state-changing operations
+- Rate limiting on login (5 attempts/minute)
+- Admin privileges checked on each request (not cached in JWT)

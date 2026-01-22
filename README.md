@@ -383,9 +383,9 @@ uvicorn app.main:app --port 8000
 - [x] JWT authentication and API keys
 - [x] Rate limiting with Redis
 - [x] Similarity search on cached embeddings (pgvector)
+- [x] Admin dashboard with usage stats
 
 ### Future
 - [ ] Pre-seeded common phrases/words
 - [ ] Client libraries (JavaScript, Go)
-- [ ] Admin dashboard
 - [ ] Cache compression to reduce storage

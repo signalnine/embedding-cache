@@ -6,6 +6,8 @@ import os
 import sys
 from pathlib import Path
 
+from .preseed import get_preseed_db_path, preseed_db_exists
+
 
 def get_cache_dir() -> Path:
     """Get the cache directory path."""
@@ -91,6 +93,49 @@ def cmd_clear(args):
     print(f"Deleted: {db_path}")
 
 
+def cmd_preseed_status(args):
+    """Show preseed database status."""
+    print("Preseed Status")
+    print("=" * 40)
+
+    if not preseed_db_exists():
+        print("Status: No preseed database found")
+        print("The preseed database is not bundled with this installation.")
+        return
+
+    preseed_path = get_preseed_db_path()
+    print(f"Database: {preseed_path}")
+
+    # Get file size
+    size_bytes = preseed_path.stat().st_size
+    if size_bytes < 1024:
+        size_str = f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        size_str = f"{size_bytes / 1024:.1f} KB"
+    else:
+        size_str = f"{size_bytes / (1024 * 1024):.1f} MB"
+    print(f"Size: {size_str}")
+
+    # Count entries and show metadata
+    try:
+        import sqlite3
+
+        conn = sqlite3.connect(f"file:{preseed_path}?mode=ro", uri=True)
+
+        cursor = conn.execute("SELECT COUNT(*) FROM embeddings")
+        count = cursor.fetchone()[0]
+        print(f"Entries: {count}")
+
+        # Show metadata
+        cursor = conn.execute("SELECT key, value FROM metadata")
+        for key, value in cursor.fetchall():
+            print(f"{key}: {value}")
+
+        conn.close()
+    except Exception as e:
+        print(f"Error reading database: {e}")
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -112,11 +157,25 @@ def main():
     clear_parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
     clear_parser.set_defaults(func=cmd_clear)
 
+    # preseed command group
+    preseed_parser = subparsers.add_parser("preseed", help="Manage preseed database")
+    preseed_subparsers = preseed_parser.add_subparsers(dest="preseed_command")
+
+    # preseed status
+    preseed_status_parser = preseed_subparsers.add_parser("status", help="Show preseed status")
+    preseed_status_parser.set_defaults(func=cmd_preseed_status)
+
     args = parser.parse_args()
 
     if args.command is None:
         parser.print_help()
         sys.exit(0)
+
+    # Handle preseed subcommands
+    if args.command == "preseed":
+        if args.preseed_command is None:
+            preseed_parser.print_help()
+            sys.exit(0)
 
     args.func(args)
 

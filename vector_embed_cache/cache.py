@@ -12,6 +12,7 @@ from .normalize import normalize_text
 from .utils import generate_cache_key
 from .storage import EmbeddingStorage
 from .providers import LocalProvider, RemoteProvider, OpenAIProvider
+from .preseed import get_preseed_db_path, preseed_db_exists, PreseedStorage
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,11 @@ class EmbeddingCache:
         db_path = Path(cache_dir) / "cache.db"
         self.storage = EmbeddingStorage(str(db_path))
 
+        # Initialize preseed storage if available
+        self.preseed_storage = None
+        if preseed_db_exists():
+            self.preseed_storage = PreseedStorage(get_preseed_db_path())
+
         # Initialize providers based on model prefix
         if model.startswith("openai:"):
             # Extract actual model name: "openai:text-embedding-3-small" -> "text-embedding-3-small"
@@ -73,7 +79,8 @@ class EmbeddingCache:
         self.stats = {
             "hits": 0,
             "misses": 0,
-            "remote_hits": 0
+            "remote_hits": 0,
+            "preseed_hits": 0
         }
 
     def _validate_input(self, text: Union[str, List[str]]):

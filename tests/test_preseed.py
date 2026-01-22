@@ -129,3 +129,17 @@ class TestPreseedStorage:
         storage.close()
         # Connection is closed - further operations would fail
         # but we don't need to verify that explicitly
+
+
+class TestPreseedIntegration:
+    def test_stats_track_preseed_hits(self, tmp_path):
+        """Verify preseed hits are tracked separately."""
+        from vector_embed_cache.cache import EmbeddingCache
+
+        cache = EmbeddingCache(
+            cache_dir=str(tmp_path / "cache"),
+            model="nomic-ai/nomic-embed-text-v1.5"
+        )
+        # Check that stats dict has preseed_hits key
+        assert "preseed_hits" in cache.stats
+        assert cache.stats["preseed_hits"] == 0

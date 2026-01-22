@@ -1,0 +1,111 @@
+/* Admin Dashboard Styles */
+:root {
+    --primary: #3b82f6;
+    --success: #22c55e;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-700: #374151;
+    --gray-900: #111827;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--gray-100);
+    color: var(--gray-900);
+    line-height: 1.5;
+}
+
+nav {
+    background: var(--gray-900);
+    padding: 1rem 2rem;
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+}
+
+nav a, nav button {
+    color: white;
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+nav a:hover, nav button:hover { opacity: 0.8; }
+
+main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+
+.flash {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+.flash.success { background: #dcfce7; color: #166534; }
+.flash.error { background: #fee2e2; color: #991b1b; }
+
+.card {
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 1rem;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    text-align: center;
+}
+.stat-card h3 { font-size: 2rem; color: var(--primary); }
+.stat-card p { color: var(--gray-700); }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--gray-200); }
+th { background: var(--gray-100); font-weight: 600; }
+tr:hover { background: var(--gray-100); }
+
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    border: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+.btn-primary { background: var(--primary); color: white; }
+.btn-danger { background: var(--danger); color: white; }
+.btn:hover { opacity: 0.9; }
+
+input[type="text"], input[type="email"], input[type="password"], input[type="search"] {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 0.375rem;
+    font-size: 1rem;
+}
+
+.form-group { margin-bottom: 1rem; }
+.form-group label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
+
+.login-container {
+    max-width: 400px;
+    margin: 4rem auto;
+}
+
+.revoked { text-decoration: line-through; opacity: 0.6; }
+
+.pagination { display: flex; gap: 0.5rem; margin-top: 1rem; }
+.pagination a { padding: 0.5rem 1rem; background: white; border-radius: 0.375rem; text-decoration: none; color: var(--gray-700); }
+.pagination a:hover { background: var(--gray-200); }

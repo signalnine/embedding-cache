@@ -1,6 +1,6 @@
 # server/app/models.py
 from datetime import datetime
-from sqlalchemy import Column, String, Text, Integer, LargeBinary, DateTime, ForeignKey, Index, JSON
+from sqlalchemy import Boolean, Column, String, Text, Integer, LargeBinary, DateTime, ForeignKey, Index, JSON
 from app.database import Base
 
 
@@ -11,6 +11,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
     tier = Column(String, nullable=False, default="free")
+    is_admin = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     email_verified_at = Column(DateTime, nullable=True)
 

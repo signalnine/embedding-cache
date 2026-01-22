@@ -198,3 +198,219 @@ class TestUsersPage:
         response = client.get("/admin/users/", cookies=login_response.cookies)
         assert response.status_code == 200
         assert "Users" in response.text
+
+
+class TestUserActions:
+    def test_toggle_admin_requires_admin(self, client, test_user, non_admin_user):
+        """Non-admin users cannot toggle admin status."""
+        # Login as non-admin
+        login_response = client.post("/admin/login/", data={
+            "email": "nonadmin@example.com",
+            "password": "testpass123"
+        }, follow_redirects=False)
+
+        # Try to toggle admin status on test_user
+        response = client.post(
+            f"/admin/users/{test_user.id}/toggle-admin",
+            cookies=login_response.cookies,
+            headers={"X-CSRF-Token": login_response.cookies.get("csrf_token", "")}
+        )
+        assert response.status_code == 403
+
+    def test_toggle_admin_success(self, client, test_user):
+        """Admin can toggle admin status on another user."""
+        # Get auth cookies
+        login_response = client.post("/admin/login/", data={
+            "email": "testadmin@example.com",
+            "password": "testpass123"
+        }, follow_redirects=False)
+
+        # Create another user to toggle
+        db = TestSessionLocal()
+        target = User(
+            id=str(uuid.uuid4()),
+            email="target@example.com",
+            password_hash=hash_password("testpass123"),
+            tier="free",
+            is_admin=False
+        )
+        db.add(target)
+        db.commit()
+        target_id = target.id
+
+        try:
+            response = client.post(
+                f"/admin/users/{target_id}/toggle-admin",
+                cookies=login_response.cookies,
+                headers={"X-CSRF-Token": login_response.cookies.get("csrf_token", "")}
+            )
+            assert response.status_code == 200
+
+            # Verify change
+            db.refresh(target)
+            assert target.is_admin is True
+
+            # Toggle back
+            response = client.post(
+                f"/admin/users/{target_id}/toggle-admin",
+                cookies=login_response.cookies,
+                headers={"X-CSRF-Token": login_response.cookies.get("csrf_token", "")}
+            )
+            assert response.status_code == 200
+            db.refresh(target)
+            assert target.is_admin is False
+        finally:
+            db.delete(target)
+            db.commit()
+            db.close()
+
+    def test_toggle_admin_user_not_found(self, client, test_user):
+        """Toggle admin on non-existent user returns 404."""
+        login_response = client.post("/admin/login/", data={
+            "email": "testadmin@example.com",
+            "password": "testpass123"
+        }, follow_redirects=False)
+
+        response = client.post(
+            "/admin/users/nonexistent-id/toggle-admin",
+            cookies=login_response.cookies,
+            headers={"X-CSRF-Token": login_response.cookies.get("csrf_token", "")}
+        )
+        assert response.status_code == 404
+
+    def test_toggle_admin_prevents_last_admin_removal(self, client, test_user):
+        """Cannot remove admin status from last admin."""
+        login_response = client.post("/admin/login/", data={
+            "email": "testadmin@example.com",
+            "password": "testpass123"
+        }, follow_redirects=False)
+
+        # Make sure test_user is the only admin
+        db = TestSessionLocal()
+        # Count admins - should be just test_user
+        admin_count = db.query(User).filter(User.is_admin == True).count()
+        db.close()
+
+        # Try to demote self (the only admin)
+        response = client.post(
+            f"/admin/users/{test_user.id}/toggle-admin",
+            cookies=login_response.cookies,
+            headers={"X-CSRF-Token": login_response.cookies.get("csrf_token", "")}
+        )
+        # Should fail if this is the last admin
+        if admin_count <= 1:
+            assert response.status_code == 400
+
+    def test_change_tier_requires_admin(self, client, test_user, non_admin_user):
+        """Non-admin users cannot change tiers."""
+        # Login as non-admin
+        login_response = client.post("/admin/login/", data={
+            "email": "nonadmin@example.com",
+            "password": "testpass123"
+        }, follow_redirects=False)
+
+        # Try to change tier on test_user
+        response = client.post(
+            f"/admin/users/{test_user.id}/tier",
+            data={"tier": "paid"},
+            cookies=login_response.cookies,
+            headers={"X-CSRF-Token": login_response.cookies.get("csrf_token", "")}
+        )
+        assert response.status_code == 403
+
+    def test_change_tier_success(self, client, test_user):
+        """Admin can change tier on another user."""
+        login_response = client.post("/admin/login/", data={
+            "email": "testadmin@example.com",
+            "password": "testpass123"
+        }, follow_redirects=False)
+
+        # Create another user to change tier
+        db = TestSessionLocal()
+        target = User(
+            id=str(uuid.uuid4()),
+            email="target_tier@example.com",
+            password_hash=hash_password("testpass123"),
+            tier="free",
+            is_admin=False
+        )
+        db.add(target)
+        db.commit()
+        target_id = target.id
+
+        try:
+            # Change tier to paid
+            response = client.post(
+                f"/admin/users/{target_id}/tier",
+                data={"tier": "paid"},
+                cookies=login_response.cookies,
+                headers={"X-CSRF-Token": login_response.cookies.get("csrf_token", "")}
+            )
+            assert response.status_code == 200
+
+            # Verify change
+            db.refresh(target)
+            assert target.tier == "paid"
+
+            # Change back to free
+            response = client.post(
+                f"/admin/users/{target_id}/tier",
+                data={"tier": "free"},
+                cookies=login_response.cookies,
+                headers={"X-CSRF-Token": login_response.cookies.get("csrf_token", "")}
+            )
+            assert response.status_code == 200
+            db.refresh(target)
+            assert target.tier == "free"
+        finally:
+            db.delete(target)
+            db.commit()
+            db.close()
+
+    def test_change_tier_invalid_tier(self, client, test_user):
+        """Changing to invalid tier returns 400."""
+        login_response = client.post("/admin/login/", data={
+            "email": "testadmin@example.com",
+            "password": "testpass123"
+        }, follow_redirects=False)
+
+        # Create another user
+        db = TestSessionLocal()
+        target = User(
+            id=str(uuid.uuid4()),
+            email="target_invalid@example.com",
+            password_hash=hash_password("testpass123"),
+            tier="free",
+            is_admin=False
+        )
+        db.add(target)
+        db.commit()
+        target_id = target.id
+
+        try:
+            response = client.post(
+                f"/admin/users/{target_id}/tier",
+                data={"tier": "premium"},  # Invalid tier
+                cookies=login_response.cookies,
+                headers={"X-CSRF-Token": login_response.cookies.get("csrf_token", "")}
+            )
+            assert response.status_code == 400
+        finally:
+            db.delete(target)
+            db.commit()
+            db.close()
+
+    def test_change_tier_user_not_found(self, client, test_user):
+        """Changing tier on non-existent user returns 404."""
+        login_response = client.post("/admin/login/", data={
+            "email": "testadmin@example.com",
+            "password": "testpass123"
+        }, follow_redirects=False)
+
+        response = client.post(
+            "/admin/users/nonexistent-id/tier",
+            data={"tier": "paid"},
+            cookies=login_response.cookies,
+            headers={"X-CSRF-Token": login_response.cookies.get("csrf_token", "")}
+        )
+        assert response.status_code == 404

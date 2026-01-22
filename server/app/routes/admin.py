@@ -3,7 +3,7 @@ import os
 from datetime import date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Request, Depends, Form
+from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -329,3 +329,49 @@ async def users_list(
         "total_pages": total_pages,
         "q": q
     })
+
+
+@router.post("/users/{user_id}/toggle-admin")
+async def toggle_admin(
+    request: Request,
+    user_id: str,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Toggle admin status for a user."""
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(404, "User not found")
+
+    # Prevent self-demotion (last admin protection)
+    if target.id == admin.id and target.is_admin:
+        admin_count = db.query(User).filter(User.is_admin == True).count()
+        if admin_count <= 1:
+            raise HTTPException(400, "Cannot remove last admin")
+
+    target.is_admin = not target.is_admin
+    db.commit()
+
+    return {"status": "ok", "is_admin": target.is_admin}
+
+
+@router.post("/users/{user_id}/tier")
+async def change_tier(
+    request: Request,
+    user_id: str,
+    tier: str = Form(...),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Change user tier."""
+    if tier not in ("free", "paid"):
+        raise HTTPException(400, "Invalid tier")
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(404, "User not found")
+
+    target.tier = tier
+    db.commit()
+
+    return {"status": "ok", "tier": target.tier}

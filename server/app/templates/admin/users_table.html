@@ -1,0 +1,59 @@
+<table>
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Tier</th>
+            <th>Admin</th>
+            <th>Created</th>
+            <th>Last Active</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr>
+            <td><a href="/admin/users/{{ u.id }}/">{{ u.email }}</a></td>
+            <td>{{ u.tier }}</td>
+            <td>
+                <input type="checkbox"
+                       hx-post="/admin/users/{{ u.id }}/toggle-admin"
+                       hx-confirm="Change admin status for {{ u.email }}?"
+                       hx-swap="none"
+                       {{ 'checked' if u.is_admin else '' }}>
+            </td>
+            <td>{{ u.created_at[:10] if u.created_at else '-' }}</td>
+            <td>{{ u.last_active[:16].replace('T', ' ') if u.last_active else 'Never' }}</td>
+            <td>
+                <select hx-post="/admin/users/{{ u.id }}/tier"
+                        hx-swap="none"
+                        style="padding: 0.25rem;">
+                    <option value="free" {{ 'selected' if u.tier == 'free' else '' }}>Free</option>
+                    <option value="paid" {{ 'selected' if u.tier == 'paid' else '' }}>Paid</option>
+                </select>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="6" style="text-align: center; padding: 2rem;">No users found</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a hx-get="/admin/users/?page={{ page - 1 }}{% if q %}&q={{ q }}{% endif %}"
+       hx-target="#user-table"
+       hx-push-url="true">Previous</a>
+    {% endif %}
+
+    <span style="padding: 0.5rem;">Page {{ page }} of {{ total_pages }}</span>
+
+    {% if page < total_pages %}
+    <a hx-get="/admin/users/?page={{ page + 1 }}{% if q %}&q={{ q }}{% endif %}"
+       hx-target="#user-table"
+       hx-push-url="true">Next</a>
+    {% endif %}
+</div>
+{% endif %}

@@ -1,0 +1,22 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Users{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">Users</h1>
+
+<div class="card">
+    <div style="margin-bottom: 1rem;">
+        <input type="search" name="q" value="{{ q or '' }}"
+               placeholder="Search by email..."
+               hx-get="/admin/users/"
+               hx-trigger="keyup changed delay:300ms"
+               hx-target="#user-table"
+               hx-push-url="true">
+    </div>
+
+    <div id="user-table">
+        {% include "admin/users_table.html" %}
+    </div>
+</div>
+{% endblock %}

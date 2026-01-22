@@ -175,3 +175,26 @@ class TestProtectedRoutes:
         assert dashboard_response.status_code == 200
         # Should show dashboard content, not redirect to login
         assert "Dashboard" in dashboard_response.text or "dashboard" in dashboard_response.text.lower()
+
+
+class TestUsersPage:
+    def test_users_page_requires_admin(self, client, test_user, non_admin_user):
+        # Login as non-admin
+        login_response = client.post("/admin/login/", data={
+            "email": non_admin_user.email,
+            "password": "testpass123"
+        }, follow_redirects=False)
+
+        # Try to access users page
+        response = client.get("/admin/users/", cookies=login_response.cookies)
+        assert response.status_code == 403
+
+    def test_users_page_accessible_for_admin(self, client, test_user):
+        login_response = client.post("/admin/login/", data={
+            "email": "testadmin@example.com",
+            "password": "testpass123"
+        }, follow_redirects=False)
+
+        response = client.get("/admin/users/", cookies=login_response.cookies)
+        assert response.status_code == 200
+        assert "Users" in response.text

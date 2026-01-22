@@ -16,6 +16,7 @@ from app.admin_auth import (
     create_admin_jwt,
     generate_csrf_token,
     get_current_admin_user,
+    require_admin,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -264,4 +265,67 @@ async def dashboard(
         "user": user,
         "csrf_token": csrf_token,
         "stats": stats
+    })
+
+
+@router.get("/users/", response_class=HTMLResponse)
+async def users_list(
+    request: Request,
+    page: int = 1,
+    q: Optional[str] = None,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """List all users (admin only)."""
+    csrf_token = generate_csrf_token(user.id)
+
+    # Pagination
+    per_page = 50
+    offset = (page - 1) * per_page
+
+    # Base query - use LIKE for SQLite compatibility (ILIKE is PostgreSQL-specific)
+    is_postgres = _is_postgres(db)
+    like_op = "ILIKE" if is_postgres else "LIKE"
+
+    query = f"""
+        SELECT
+            u.id, u.email, u.tier, u.is_admin, u.created_at,
+            (SELECT MAX(last_used_at) FROM api_keys WHERE user_id = u.id) as last_active
+        FROM users u
+    """
+    params = {"limit": per_page, "offset": offset}
+
+    # Search filter
+    if q:
+        query += f" WHERE u.email {like_op} :search"
+        params["search"] = f"%{q}%"
+
+    query += " ORDER BY u.created_at DESC LIMIT :limit OFFSET :offset"
+
+    users = db.execute(text(query), params).fetchall()
+
+    # Total count for pagination
+    count_query = "SELECT COUNT(*) FROM users"
+    if q:
+        count_query += f" WHERE email {like_op} :search"
+    total = db.execute(text(count_query), {"search": f"%{q}%"} if q else {}).scalar()
+
+    total_pages = (total + per_page - 1) // per_page
+
+    # For HTMX partial updates
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request, "admin/users_table.html", {
+            "users": users,
+            "page": page,
+            "total_pages": total_pages,
+            "q": q
+        })
+
+    return templates.TemplateResponse(request, "admin/users.html", {
+        "user": user,
+        "csrf_token": csrf_token,
+        "users": users,
+        "page": page,
+        "total_pages": total_pages,
+        "q": q
     })

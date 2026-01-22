@@ -1,0 +1,38 @@
+{
+  "name": "@vector-embed/client",
+  "version": "0.1.0",
+  "description": "JavaScript/TypeScript client for vector-embed-cache API",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["embeddings", "vector", "cache", "ai", "ml", "vector-embed-cache"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/signalnine/embedding-cache.git",
+    "directory": "clients/js"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}

@@ -3,8 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from fastapi import Request, Response, HTTPException, Depends
-from fastapi.responses import JSONResponse
+from fastapi import Request, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -47,9 +46,14 @@ def verify_csrf_token(token: str, user_id: str, max_age: int = 3600) -> bool:
 
 # Auth redirect helper (handles HTMX)
 def auth_redirect(request: Request):
-    """Return appropriate redirect for auth failure."""
+    """Raise appropriate exception for auth failure."""
     if request.headers.get("HX-Request"):
-        return Response(status_code=200, headers={"HX-Redirect": "/admin/login/"})
+        # For HTMX: 200 response with HX-Redirect header
+        raise HTTPException(
+            status_code=200,
+            headers={"HX-Redirect": "/admin/login/"}
+        )
+    # For regular requests: 302 redirect
     raise HTTPException(status_code=302, headers={"Location": "/admin/login/"})
 
 
@@ -58,19 +62,19 @@ async def get_current_admin_user(
     request: Request,
     db: Session = Depends(get_db)
 ) -> User:
-    """Get current user from JWT cookie. Returns User or redirects."""
+    """Get current user from JWT cookie. Raises HTTPException on failure."""
     token = request.cookies.get("auth_token")
     if not token:
-        return auth_redirect(request)
+        auth_redirect(request)  # Now raises, not returns
 
     try:
         payload = verify_admin_jwt(token)
     except jwt.PyJWTError:
-        return auth_redirect(request)
+        auth_redirect(request)
 
     user = db.query(User).filter(User.id == payload["sub"]).first()
     if not user:
-        return auth_redirect(request)
+        auth_redirect(request)
 
     return user
 
@@ -79,12 +83,7 @@ async def require_admin(
     request: Request,
     user: User = Depends(get_current_admin_user)
 ) -> User:
-    """Require admin privileges."""
-    if isinstance(user, Response):
-        return user  # Already a redirect response
-
+    """Require admin privileges. Raises HTTPException if not admin."""
     if not user.is_admin:
-        if request.headers.get("HX-Request"):
-            raise HTTPException(403, detail="Admin access required")
         raise HTTPException(403, detail="Admin access required")
     return user

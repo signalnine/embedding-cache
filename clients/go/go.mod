@@ -1,3 +1,3 @@
 module github.com/signalnine/embedding-cache/clients/go
 
-go 1.24.4
+go 1.21

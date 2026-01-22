@@ -19,7 +19,7 @@ const (
 	MaxBatchSize = 100
 
 	// UserAgent is the User-Agent header value sent with all requests.
-	UserAgent = "vector-embed-cache-go/1.0"
+	UserAgent = "vectorembed-go/" + Version
 )
 
 // Client is the main client for interacting with the vector-embed-cache API.

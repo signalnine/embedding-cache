@@ -16,9 +16,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Core Flow:**
 1. Hash incoming string (SHA-256) combined with model name
-2. Check if embedding exists in SQLite cache file
-3. Cache hit → return cached vectors (instant, free)
-4. Cache miss → compute via embedding model, cache result, return
+2. Check if embedding exists in user's SQLite cache file
+3. User cache hit → return cached vectors (instant, free)
+4. Check bundled preseed database for common words
+5. Preseed hit → return pre-computed vectors (instant, free)
+6. Cache miss → compute via embedding model, cache result, return
 
 **Features:**
 - Multiple model support: Local models (nomic-embed-text-v1.5, v2-moe) and OpenAI
@@ -51,8 +53,14 @@ vector_embed_cache/          # Python library (PyPI package)
 ├── storage.py               # SQLite storage layer
 ├── normalize.py             # Text normalization
 ├── providers.py             # LocalProvider, OpenAIProvider
+├── preseed.py               # Pre-seeded embeddings lookup
 ├── cli.py                   # CLI commands
-└── utils.py                 # Utility functions
+├── utils.py                 # Utility functions
+└── data/
+    └── preseed_v1.5.db      # Bundled preseed database (3K words)
+
+scripts/                     # Development scripts
+└── generate_preseed.py      # Generate preseed database from wordfreq
 
 server/                      # Hosted backend (FastAPI)
 ├── app/
@@ -165,6 +173,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - **Provider Pattern**: `LocalProvider`, `OpenAIProvider` share common interface
 - **Lazy Loading**: Models loaded on first use
 - **Text Normalization**: Whitespace collapsed, lowercased for cache key generation
+- **Preseed Fallback**: Bundled SQLite DB with 3,000 common words (nomic-v1.5 only)
 
 **Server:**
 - **Hybrid Compute**: Free tier = BYOK, Paid tier = server GPU
@@ -208,8 +217,8 @@ The library is tested with [semantic-tarot](../semantic-tarot/), which uses it f
 - [x] Rate limiting
 - [x] Similarity search on cached embeddings (pgvector)
 - [x] Admin dashboard with usage stats
+- [x] Pre-seeded common words (3,000 English words)
 
 ### Future
-- [ ] Pre-seeded common phrases/words
 - [ ] Client libraries (JS, Go)
 - [ ] Cache compression

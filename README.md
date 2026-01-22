@@ -11,9 +11,11 @@ A Python library and self-hosted backend for caching embedding vectors. Eliminat
 
 🚀 **Local SQLite cache for zero-latency lookups** - Cache all embeddings in a local database for instant retrieval
 
-🔄 **Smart fallback chain: local model → remote backend** - Uses remote when local fails
+🔄 **Smart fallback chain: local model → preseed → remote backend** - Uses preseed and remote when local fails
 
 💰 **Zero API costs using nomic-embed-text-v1.5** - Run embeddings locally with open-source models
+
+📦 **Pre-seeded common words** - Ships with 3,000 pre-computed embeddings for instant cache hits on common English words
 
 📊 **Cache statistics tracking hits/misses** - Monitor cache performance and efficiency
 
@@ -236,10 +238,25 @@ cache = EmbeddingCache(
 
 1. **Input Normalization**: Normalize text (whitespace, lowercasing) to maximize cache hits
 2. **Cache Key Generation**: Hash (normalized_text + model_name) with SHA-256
-3. **Cache Lookup**: Check SQLite for existing embedding
+3. **User Cache Lookup**: Check user's SQLite for existing embedding
 4. **Cache Hit**: Return cached embedding (zero latency)
-5. **Cache Miss**: Generate embedding via fallback chain
-6. **Cache Store**: Save embedding to SQLite
+5. **Preseed Fallback**: Check bundled preseed database for common words
+6. **Preseed Hit**: Return pre-computed embedding (zero compute)
+7. **Cache Miss**: Generate embedding via fallback chain (local model → remote)
+8. **Cache Store**: Save embedding to user's SQLite
+
+### Pre-seeded Embeddings
+
+The library ships with pre-computed embeddings for 3,000 common English words using the nomic-ai/nomic-embed-text-v1.5 model. This means:
+
+- **Instant hits** on common words like "the", "hello", "world"
+- **No computation needed** for frequently used vocabulary
+- **Automatic fallback** - user cache → preseed → compute
+
+Check preseed status with the CLI:
+```bash
+vector-embed-cache preseed-status
+```
 
 ### Models
 
@@ -384,8 +401,8 @@ uvicorn app.main:app --port 8000
 - [x] Rate limiting with Redis
 - [x] Similarity search on cached embeddings (pgvector)
 - [x] Admin dashboard with usage stats
+- [x] Pre-seeded common words (3,000 English words)
 
 ### Future
-- [ ] Pre-seeded common phrases/words
 - [ ] Client libraries (JavaScript, Go)
 - [ ] Cache compression to reduce storage

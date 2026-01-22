@@ -1,0 +1,19 @@
+<tr class="{{ 'revoked' if key.revoked_at else '' }}">
+    <td><code>{{ key.key_prefix }}...</code></td>
+    <td>{{ key.created_at[:10] if key.created_at else '-' }}</td>
+    <td>{{ key.last_used_at[:16] if key.last_used_at else 'Never' }}</td>
+    <td>{{ 'Revoked' if key.revoked_at else 'Active' }}</td>
+    <td>
+        {% if not key.revoked_at %}
+        <button class="btn btn-danger"
+                hx-post="/admin/keys/{{ key.key_prefix }}/revoke"
+                hx-target="closest tr"
+                hx-swap="outerHTML"
+                hx-confirm="Revoke this API key?">
+            Revoke
+        </button>
+        {% else %}
+        <span style="color: #9ca3af;">-</span>
+        {% endif %}
+    </td>
+</tr>

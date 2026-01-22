@@ -375,3 +375,95 @@ async def change_tier(
     db.commit()
 
     return {"status": "ok", "tier": target.tier}
+
+
+@router.get("/keys/", response_class=HTMLResponse)
+async def api_keys_list(
+    request: Request,
+    user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """List API keys for current user."""
+    csrf_token = generate_csrf_token(user.id)
+
+    query = """
+        SELECT key_prefix, created_at, last_used_at, revoked_at
+        FROM api_keys
+        WHERE user_id = :user_id
+        ORDER BY created_at DESC
+    """
+    keys = db.execute(text(query), {"user_id": user.id}).fetchall()
+
+    # Check for newly created key in session
+    new_key = request.session.pop("new_key", None) if hasattr(request, 'session') else None
+
+    return templates.TemplateResponse(request, "admin/api_keys.html", {
+        "user": user,
+        "csrf_token": csrf_token,
+        "keys": keys,
+        "new_key": new_key
+    })
+
+
+@router.post("/keys/create")
+async def create_api_key(
+    request: Request,
+    user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Create new API key."""
+    from app.crypto import generate_api_key, hash_api_key, get_key_prefix
+
+    raw_key = generate_api_key()
+    key_hash = hash_api_key(raw_key)
+    key_prefix = get_key_prefix(raw_key)
+
+    db.execute(text("""
+        INSERT INTO api_keys (key_hash, key_prefix, user_id, tier, created_at)
+        VALUES (:key_hash, :key_prefix, :user_id, :tier, CURRENT_TIMESTAMP)
+    """), {
+        "key_hash": key_hash,
+        "key_prefix": key_prefix,
+        "user_id": user.id,
+        "tier": user.tier
+    })
+    db.commit()
+
+    # Store in session to show once
+    if hasattr(request, 'session'):
+        request.session["new_key"] = raw_key
+
+    return RedirectResponse("/admin/keys/", status_code=303)
+
+
+@router.post("/keys/{key_prefix}/revoke")
+async def revoke_api_key(
+    request: Request,
+    key_prefix: str,
+    user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Revoke an API key."""
+    # SQLite doesn't support RETURNING, so we use UPDATE then SELECT
+    result = db.execute(text("""
+        UPDATE api_keys
+        SET revoked_at = CURRENT_TIMESTAMP
+        WHERE key_prefix = :key_prefix AND user_id = :user_id AND revoked_at IS NULL
+    """), {"key_prefix": key_prefix, "user_id": user.id})
+
+    if result.rowcount == 0:
+        raise HTTPException(404, "Key not found or already revoked")
+
+    db.commit()
+
+    # Fetch the updated row
+    updated_key = db.execute(text("""
+        SELECT key_prefix, created_at, last_used_at, revoked_at
+        FROM api_keys
+        WHERE key_prefix = :key_prefix AND user_id = :user_id
+    """), {"key_prefix": key_prefix, "user_id": user.id}).fetchone()
+
+    # Return updated row HTML for HTMX
+    return templates.TemplateResponse(request, "admin/api_key_row.html", {
+        "key": updated_key
+    })

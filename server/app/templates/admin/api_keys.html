@@ -1,0 +1,48 @@
+{% extends "admin/base.html" %}
+
+{% block title %}API Keys{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem;">API Keys</h1>
+
+{% if new_key %}
+<div class="card" style="background: #fef3c7; border: 2px solid #f59e0b;">
+    <h3 style="color: #92400e;">New API Key Created</h3>
+    <p style="margin: 0.5rem 0;">Copy this key now. You won't be able to see it again:</p>
+    <code style="display: block; padding: 1rem; background: white; border-radius: 0.25rem; font-size: 1rem; word-break: break-all;">
+        {{ new_key }}
+    </code>
+</div>
+{% endif %}
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2>Your API Keys</h2>
+        <form method="post" action="/admin/keys/create" style="margin: 0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-primary">Create New Key</button>
+        </form>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Key Prefix</th>
+                <th>Created</th>
+                <th>Last Used</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for key in keys %}
+            {% include "admin/api_key_row.html" %}
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 2rem;">No API keys yet</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

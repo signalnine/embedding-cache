@@ -62,6 +62,8 @@ server/                      # Hosted backend (FastAPI)
 │   ├── schemas.py           # Pydantic request/response schemas
 │   ├── similarity.py        # pgvector similarity search logic
 │   ├── auth.py              # JWT + bcrypt authentication
+│   ├── admin_auth.py        # Admin JWT cookies + CSRF tokens
+│   ├── cli.py               # CLI commands (create-admin)
 │   ├── crypto.py            # Fernet encryption for API keys
 │   ├── database.py          # Database connection
 │   ├── redis_client.py      # Redis connection (optional)
@@ -70,12 +72,15 @@ server/                      # Hosted backend (FastAPI)
 │   ├── compute.py           # GPU embedding computation
 │   ├── normalize.py         # Text normalization
 │   ├── passthrough.py       # BYOK provider passthrough
+│   ├── templates/admin/     # Jinja2 templates for admin UI
+│   ├── static/              # CSS, JS (htmx, frappe-charts)
 │   └── routes/
 │       ├── users.py         # Auth endpoints
 │       ├── embed.py         # Embedding endpoints
 │       ├── providers.py     # Provider config endpoints
-│       └── search.py        # Similarity search endpoint
-├── tests/                   # Server unit tests (68 tests)
+│       ├── search.py        # Similarity search endpoint
+│       └── admin.py         # Admin dashboard routes
+├── tests/                   # Server unit tests (110+ tests)
 ├── alembic/                 # Database migrations
 ├── scripts/
 │   ├── seed.py              # Pre-seeding script
@@ -202,8 +207,9 @@ The library is tested with [semantic-tarot](../semantic-tarot/), which uses it f
 - [x] JWT authentication
 - [x] Rate limiting
 - [x] Similarity search on cached embeddings (pgvector)
+- [x] Admin dashboard with usage stats
 
 ### Future
 - [ ] Pre-seeded common phrases/words
 - [ ] Client libraries (JS, Go)
-- [ ] Admin dashboard
+- [ ] Cache compression

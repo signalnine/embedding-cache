@@ -1,5 +1,6 @@
 """Python client for vector-embed-cache API."""
 
+from vector_embed_client.client import Client
 from vector_embed_client.errors import (
     AuthenticationError,
     NetworkError,
@@ -18,6 +19,7 @@ from vector_embed_client.types import (
 __version__ = "0.1.0"
 
 __all__: list[str] = [
+    "Client",
     "VectorEmbedError",
     "AuthenticationError",
     "RateLimitError",

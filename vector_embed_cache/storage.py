@@ -58,6 +58,54 @@ class EmbeddingStorage:
 
         self._conn.commit()
 
+    def _deserialize_embedding(
+        self, blob: bytes, dimensions: Optional[int], dtype: Optional[str], cache_key: str
+    ) -> np.ndarray:
+        """Deserialize embedding with validation. Always returns float32.
+
+        Args:
+            blob: Raw embedding bytes
+            dimensions: Expected dimensions (None for legacy format)
+            dtype: Storage dtype string (None for legacy format)
+            cache_key: Cache key for error messages
+
+        Returns:
+            Embedding array as float32
+
+        Raises:
+            ValueError: On unknown dtype, size mismatch, or parse failure
+        """
+        # New format: has dimensions and dtype
+        if dimensions is not None and dtype is not None:
+            # Map dtype string to numpy dtype (little-endian)
+            dtype_map = {"float16": "<f2", "float32": "<f4"}
+            if dtype not in dtype_map:
+                raise ValueError(f"Unknown dtype '{dtype}' for cache_key={cache_key}")
+
+            np_dtype = np.dtype(dtype_map[dtype])
+            expected_size = dimensions * np_dtype.itemsize
+
+            # Validate blob size matches expected dimensions
+            if len(blob) != expected_size:
+                raise ValueError(
+                    f"Blob size mismatch for cache_key={cache_key}: "
+                    f"expected {expected_size} bytes ({dimensions} × {np_dtype.itemsize}), "
+                    f"got {len(blob)} bytes"
+                )
+
+            embedding = np.frombuffer(blob, dtype=np_dtype)
+            # Always upcast to float32 for computation
+            return embedding.astype(np.float32)
+
+        # Legacy format: msgpack (no fallback - fail explicitly)
+        try:
+            embedding_list = msgpack.unpackb(blob)
+            return np.array(embedding_list, dtype=np.float32)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to deserialize legacy format for cache_key={cache_key}: {e}"
+            )
+
     def get(self, cache_key: str) -> Optional[np.ndarray]:
         """Retrieve embedding from cache.
 
@@ -67,12 +115,12 @@ class EmbeddingStorage:
             cache_key: Cache key to look up
 
         Returns:
-            Embedding array or None if not found
+            Embedding array (always float32) or None if not found
         """
         with self._lock:
             cursor = self._conn.cursor()
             cursor.execute(
-                "SELECT embedding FROM embeddings WHERE cache_key = ?",
+                "SELECT embedding, dimensions, dtype FROM embeddings WHERE cache_key = ?",
                 (cache_key,)
             )
             row = cursor.fetchone()
@@ -89,34 +137,37 @@ class EmbeddingStorage:
             """, (now, cache_key))
             self._conn.commit()
 
-            # Deserialize embedding
-            embedding_bytes = row[0]
-            embedding_list = msgpack.unpackb(embedding_bytes)
-            return np.array(embedding_list, dtype=np.float32)
+            # Deserialize embedding with format detection
+            embedding_bytes, dimensions, dtype = row
+            return self._deserialize_embedding(embedding_bytes, dimensions, dtype, cache_key)
 
     def set(self, cache_key: str, model: str, embedding: np.ndarray):
-        """Store embedding in cache.
+        """Store embedding in cache using float16 binary format.
 
         Args:
             cache_key: Cache key
             model: Model name
-            embedding: Embedding vector
+            embedding: Embedding vector (any float dtype, will be converted to float16)
         """
         with self._lock:
             now = int(time.time())
 
-            # Serialize embedding
-            embedding_bytes = msgpack.packb(embedding.tolist())
+            # Serialize embedding as little-endian float16
+            embedding_f16 = embedding.astype("<f2")
+            embedding_bytes = embedding_f16.tobytes()
+            dimensions = len(embedding)
 
             self._conn.execute("""
                 INSERT INTO embeddings
-                (cache_key, model, embedding, created_at, access_count, last_accessed)
-                VALUES (?, ?, ?, ?, 1, ?)
+                (cache_key, model, embedding, dimensions, dtype, created_at, access_count, last_accessed)
+                VALUES (?, ?, ?, ?, 'float16', ?, 1, ?)
                 ON CONFLICT(cache_key) DO UPDATE SET
                     model = excluded.model,
                     embedding = excluded.embedding,
+                    dimensions = excluded.dimensions,
+                    dtype = excluded.dtype,
                     last_accessed = excluded.last_accessed
-            """, (cache_key, model, embedding_bytes, now, now))
+            """, (cache_key, model, embedding_bytes, dimensions, now, now))
             self._conn.commit()
 
     def close(self):

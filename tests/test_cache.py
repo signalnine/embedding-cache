@@ -23,7 +23,7 @@ def test_cache_init_creates_storage():
 
 
 def test_cache_embed_caches_result():
-    """Test that embedding results are cached."""
+    """Test that embedding results are cached with float16 compression."""
     with tempfile.TemporaryDirectory() as tmpdir:
         cache = EmbeddingCache(cache_dir=tmpdir)
 
@@ -36,12 +36,14 @@ def test_cache_embed_caches_result():
         # First call should compute
         result1 = cache.embed(text)
         assert cache.local_provider.embed.call_count == 1
-        np.testing.assert_array_equal(result1, test_embedding)
+        # Use decimal=3 for float16 precision
+        np.testing.assert_array_almost_equal(result1, test_embedding, decimal=3)
 
         # Second call should hit cache (no additional compute)
         result2 = cache.embed(text)
         assert cache.local_provider.embed.call_count == 1
-        np.testing.assert_array_equal(result2, test_embedding)
+        # Cached result should be close to original (within float16 precision)
+        np.testing.assert_array_almost_equal(result2, test_embedding, decimal=3)
 
 
 def test_cache_embed_normalizes_text():
@@ -92,9 +94,9 @@ def test_cache_embed_batch():
         assert isinstance(results, list)
         assert len(results) == 3
 
-        # Each result should match expected embedding
+        # Each result should match expected embedding (with float16 precision)
         for i, text in enumerate(texts):
-            np.testing.assert_array_equal(results[i], embeddings_map[text])
+            np.testing.assert_array_almost_equal(results[i], embeddings_map[text], decimal=3)
 
 
 def test_cache_stats_tracking():

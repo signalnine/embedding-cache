@@ -48,10 +48,11 @@ def test_local_provider_full_flow(temp_cache_dir):
     # Second embedding of same text - should be cache hit
     emb2 = cache.embed(text1)
 
-    # Verify same array returned
+    # Verify cache hit returns array close to original (within float16 precision)
+    # Note: emb1 is original float32, emb2 is from compressed storage (float16→float32)
     assert isinstance(emb2, np.ndarray)
     assert emb2.shape == (768,)
-    np.testing.assert_array_equal(emb1, emb2)
+    np.testing.assert_array_almost_equal(emb2, emb1, decimal=3)
 
     # Verify stats
     assert cache.stats["hits"] == 1
@@ -141,13 +142,24 @@ def test_normalization_cache_behavior(temp_cache_dir):
         emb = cache.embed(text)
         embeddings.append(emb)
 
-    # Verify all embeddings are identical (from cache)
-    for i in range(1, len(embeddings)):
+    # Verify all cache-hit embeddings are identical
+    # Note: embeddings[0] may differ slightly from embeddings[1:] due to float16 compression
+    # (first call returns original float32, subsequent calls return compressed float16→float32)
+    # So we verify that all cache hits (indices 1-4) return identical arrays
+    for i in range(2, len(embeddings)):
         np.testing.assert_array_equal(
-            embeddings[0],
+            embeddings[1],
             embeddings[i],
-            err_msg=f"Embedding for '{variants[i]}' should match '{variants[0]}'"
+            err_msg=f"Embedding for '{variants[i]}' should match '{variants[1]}'"
         )
+
+    # Verify first embedding is very close to cached versions (within float16 precision)
+    np.testing.assert_array_almost_equal(
+        embeddings[0],
+        embeddings[1],
+        decimal=3,
+        err_msg="First embedding should match cached version within float16 precision"
+    )
 
     # Verify stats: 1 miss (first), 4 hits (rest)
     assert cache.stats["misses"] == 1

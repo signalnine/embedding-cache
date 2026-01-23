@@ -32,7 +32,7 @@ def test_storage_get_nonexistent(temp_cache_dir):
 
 
 def test_storage_set_and_get(temp_cache_dir):
-    """Should store and retrieve embeddings."""
+    """Should store and retrieve embeddings with float16 compression."""
     db_path = Path(temp_cache_dir) / "test.db"
     storage = EmbeddingStorage(str(db_path))
 
@@ -44,7 +44,8 @@ def test_storage_set_and_get(temp_cache_dir):
     result = storage.get(cache_key)
 
     assert result is not None
-    np.testing.assert_array_almost_equal(result, embedding)
+    # Use decimal=3 for float16 precision (3-4 significant digits)
+    np.testing.assert_array_almost_equal(result, embedding, decimal=3)
 
 
 def test_storage_updates_access_count(temp_cache_dir):

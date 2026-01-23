@@ -28,7 +28,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - SQLite file storage: Simple, portable cache files
 - Batch operations: `embed_batch()` for multiple texts
 - Thread-safe: Safe for concurrent use
-- CLI tool: `embedding-cache stats`, `embedding-cache clear`
+- CLI tool: `embedding-cache stats`, `embedding-cache clear`, `embedding-cache migrate`
+- Cache compression: Float16 quantization (~4x storage reduction)
 
 ### Server (server/)
 
@@ -99,6 +100,26 @@ server/                      # Hosted backend (FastAPI)
 
 tests/                       # Library unit tests
 docs/plans/                  # Design documents and implementation plans
+
+clients/                     # Client libraries for hosted API
+├── js/                      # JavaScript/TypeScript client (npm)
+│   ├── src/
+│   │   ├── client.ts        # Main VectorEmbedClient class
+│   │   ├── errors.ts        # Typed error classes
+│   │   └── types.ts         # TypeScript interfaces
+│   └── package.json
+├── python/                  # Python client (PyPI)
+│   ├── src/vector_embed_client/
+│   │   ├── client.py        # VectorEmbedClient class
+│   │   ├── errors.py        # Exception hierarchy
+│   │   └── types.py         # Dataclasses for API types
+│   └── pyproject.toml
+└── go/                      # Go client
+    └── vectorembed/
+        ├── client.go        # Client implementation
+        ├── errors.go        # Error types
+        ├── types.go         # Request/response structs
+        └── options.go       # Functional options pattern
 ```
 
 ## Usage
@@ -218,7 +239,5 @@ The library is tested with [semantic-tarot](../semantic-tarot/), which uses it f
 - [x] Similarity search on cached embeddings (pgvector)
 - [x] Admin dashboard with usage stats
 - [x] Pre-seeded common words (3,000 English words)
-
-### Future
-- [ ] Client libraries (JS, Go)
-- [ ] Cache compression
+- [x] Client libraries (JavaScript, Python, Go)
+- [x] Cache compression (float16 quantization, ~4x reduction)

@@ -222,7 +222,6 @@ def test_storage_schema_migration(temp_cache_dir):
 
 def test_storage_legacy_format_read(temp_cache_dir):
     """Should read legacy msgpack format entries."""
-    import sqlite3
     import msgpack
     db_path = Path(temp_cache_dir) / "test.db"
 

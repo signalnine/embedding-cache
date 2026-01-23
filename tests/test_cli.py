@@ -102,7 +102,6 @@ class TestMigrateCLI:
         """Migrate should convert legacy msgpack entries to float16."""
         import sqlite3
         import msgpack
-        import numpy as np
         from pathlib import Path
 
         db_path = Path(temp_cache_dir) / "cache.db"

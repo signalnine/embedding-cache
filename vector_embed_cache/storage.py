@@ -26,17 +26,36 @@ class EmbeddingStorage:
         self._create_schema()
 
     def _create_schema(self):
-        """Create embeddings table if it doesn't exist."""
+        """Create embeddings table if it doesn't exist, and migrate if needed."""
+        # Create table with new schema (includes dimensions and dtype columns)
         self._conn.execute("""
             CREATE TABLE IF NOT EXISTS embeddings (
                 cache_key TEXT PRIMARY KEY,
                 model TEXT NOT NULL,
                 embedding BLOB NOT NULL,
+                dimensions INTEGER,
+                dtype TEXT,
                 created_at INTEGER NOT NULL,
                 access_count INTEGER DEFAULT 1,
                 last_accessed INTEGER NOT NULL
             )
         """)
+        self._conn.commit()
+
+        # Migrate existing tables that don't have the new columns
+        self._migrate_schema()
+
+    def _migrate_schema(self):
+        """Add dimensions and dtype columns to existing tables if missing."""
+        cursor = self._conn.execute("PRAGMA table_info(embeddings)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        if "dimensions" not in columns:
+            self._conn.execute("ALTER TABLE embeddings ADD COLUMN dimensions INTEGER")
+
+        if "dtype" not in columns:
+            self._conn.execute("ALTER TABLE embeddings ADD COLUMN dtype TEXT")
+
         self._conn.commit()
 
     def get(self, cache_key: str) -> Optional[np.ndarray]:

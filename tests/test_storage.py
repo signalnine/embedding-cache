@@ -90,3 +90,158 @@ def test_storage_preserves_access_count_on_update(temp_cache_dir):
     cursor.execute("SELECT access_count FROM embeddings WHERE cache_key = ?", (cache_key,))
     access_count = cursor.fetchone()[0]
     assert access_count == 2, "access_count should be preserved on update"
+
+
+# ============================================================================
+# Compression-specific tests
+# ============================================================================
+
+
+def test_storage_new_format_stores_metadata(temp_cache_dir):
+    """New entries should have dimensions and dtype set."""
+    db_path = Path(temp_cache_dir) / "test.db"
+    storage = EmbeddingStorage(str(db_path))
+
+    embedding = np.array([0.1, 0.2, 0.3, 0.4, 0.5], dtype=np.float32)
+    storage.set("key1", "model1", embedding)
+
+    cursor = storage._conn.execute(
+        "SELECT dimensions, dtype FROM embeddings WHERE cache_key = 'key1'"
+    )
+    dimensions, dtype = cursor.fetchone()
+
+    assert dimensions == 5
+    assert dtype == "float16"
+
+
+def test_storage_new_format_blob_size(temp_cache_dir):
+    """New format blob should be dimensions * 2 bytes (float16)."""
+    db_path = Path(temp_cache_dir) / "test.db"
+    storage = EmbeddingStorage(str(db_path))
+
+    embedding = np.array([0.1] * 768, dtype=np.float32)
+    storage.set("key1", "model1", embedding)
+
+    cursor = storage._conn.execute(
+        "SELECT embedding FROM embeddings WHERE cache_key = 'key1'"
+    )
+    blob = cursor.fetchone()[0]
+
+    # 768 dimensions * 2 bytes per float16 = 1536 bytes
+    assert len(blob) == 768 * 2
+
+
+def test_storage_roundtrip_preserves_cosine_similarity(temp_cache_dir):
+    """Float16 compression should preserve cosine similarity."""
+    db_path = Path(temp_cache_dir) / "test.db"
+    storage = EmbeddingStorage(str(db_path))
+
+    # Use realistic embedding values
+    np.random.seed(42)
+    original = np.random.randn(768).astype(np.float32)
+    original = original / np.linalg.norm(original)  # Normalize
+
+    storage.set("key1", "model1", original)
+    retrieved = storage.get("key1")
+
+    # Compute cosine similarity
+    cosine_sim = np.dot(original, retrieved) / (
+        np.linalg.norm(original) * np.linalg.norm(retrieved)
+    )
+
+    # Should be very close to 1.0
+    assert cosine_sim > 0.9999, f"Cosine similarity {cosine_sim} too low"
+
+
+def test_storage_validation_blob_size_mismatch(temp_cache_dir):
+    """Should raise ValueError on blob size mismatch."""
+    import pytest
+    db_path = Path(temp_cache_dir) / "test.db"
+    storage = EmbeddingStorage(str(db_path))
+
+    # Manually insert corrupted entry
+    storage._conn.execute("""
+        INSERT INTO embeddings
+        (cache_key, model, embedding, dimensions, dtype, created_at, access_count, last_accessed)
+        VALUES ('corrupt', 'model', X'0102030405', 768, 'float16', 0, 1, 0)
+    """)
+    storage._conn.commit()
+
+    with pytest.raises(ValueError, match="Blob size mismatch"):
+        storage.get("corrupt")
+
+
+def test_storage_validation_unknown_dtype(temp_cache_dir):
+    """Should raise ValueError on unknown dtype."""
+    import pytest
+    db_path = Path(temp_cache_dir) / "test.db"
+    storage = EmbeddingStorage(str(db_path))
+
+    # Manually insert entry with bad dtype
+    storage._conn.execute("""
+        INSERT INTO embeddings
+        (cache_key, model, embedding, dimensions, dtype, created_at, access_count, last_accessed)
+        VALUES ('bad_dtype', 'model', X'00000000', 2, 'float128', 0, 1, 0)
+    """)
+    storage._conn.commit()
+
+    with pytest.raises(ValueError, match="Unknown dtype"):
+        storage.get("bad_dtype")
+
+
+def test_storage_schema_migration(temp_cache_dir):
+    """Opening old database should add new columns."""
+    import sqlite3
+    db_path = Path(temp_cache_dir) / "test.db"
+
+    # Create old schema manually
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE embeddings (
+            cache_key TEXT PRIMARY KEY,
+            model TEXT NOT NULL,
+            embedding BLOB NOT NULL,
+            created_at INTEGER NOT NULL,
+            access_count INTEGER DEFAULT 1,
+            last_accessed INTEGER NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+    # Open with EmbeddingStorage (should migrate)
+    storage = EmbeddingStorage(str(db_path))
+
+    # Verify new columns exist
+    cursor = storage._conn.execute("PRAGMA table_info(embeddings)")
+    columns = {row[1] for row in cursor.fetchall()}
+
+    assert "dimensions" in columns
+    assert "dtype" in columns
+
+
+def test_storage_legacy_format_read(temp_cache_dir):
+    """Should read legacy msgpack format entries."""
+    import sqlite3
+    import msgpack
+    db_path = Path(temp_cache_dir) / "test.db"
+
+    # Create database with schema that includes new columns
+    storage = EmbeddingStorage(str(db_path))
+
+    # Insert legacy format entry (msgpack, no dimensions/dtype)
+    legacy_embedding = [0.1, 0.2, 0.3]
+    legacy_blob = msgpack.packb(legacy_embedding)
+
+    storage._conn.execute("""
+        INSERT INTO embeddings
+        (cache_key, model, embedding, dimensions, dtype, created_at, access_count, last_accessed)
+        VALUES ('legacy', 'model', ?, NULL, NULL, 0, 1, 0)
+    """, (legacy_blob,))
+    storage._conn.commit()
+
+    # Should read legacy format
+    result = storage.get("legacy")
+
+    assert result is not None
+    np.testing.assert_array_almost_equal(result, [0.1, 0.2, 0.3], decimal=5)

@@ -17,8 +17,18 @@ def get_cache_dir() -> Path:
     return Path.home() / ".cache" / "embedding-cache"
 
 
+def _format_size(size_bytes: int) -> str:
+    """Format bytes as human-readable size."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    else:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
 def cmd_stats(args):
-    """Show cache statistics."""
+    """Show cache statistics with format breakdown."""
     cache_dir = get_cache_dir()
     db_path = cache_dir / "cache.db"
 
@@ -33,23 +43,34 @@ def cmd_stats(args):
 
     # Get file size
     size_bytes = db_path.stat().st_size
-    if size_bytes < 1024:
-        size_str = f"{size_bytes} B"
-    elif size_bytes < 1024 * 1024:
-        size_str = f"{size_bytes / 1024:.1f} KB"
-    else:
-        size_str = f"{size_bytes / (1024 * 1024):.1f} MB"
+    print(f"Database size: {_format_size(size_bytes)}")
 
-    print(f"Database size: {size_str}")
-
-    # Count entries
+    # Count entries with format breakdown
     try:
         import sqlite3
         conn = sqlite3.connect(db_path)
+
+        # Total count
         cursor = conn.execute("SELECT COUNT(*) FROM embeddings")
-        count = cursor.fetchone()[0]
+        total = cursor.fetchone()[0]
+        print(f"Total entries: {total}")
+
+        if total > 0:
+            # Count by format
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM embeddings WHERE dtype IS NOT NULL"
+            )
+            new_format = cursor.fetchone()[0]
+            legacy = total - new_format
+
+            if new_format > 0:
+                pct = (new_format / total) * 100
+                print(f"  - New format (float16): {new_format} ({pct:.0f}%)")
+            if legacy > 0:
+                pct = (legacy / total) * 100
+                print(f"  - Legacy format: {legacy} ({pct:.0f}%)")
+
         conn.close()
-        print(f"Total entries: {count}")
     except Exception as e:
         print(f"Error reading database: {e}")
 
@@ -91,6 +112,79 @@ def cmd_clear(args):
 
     db_path.unlink()
     print(f"Deleted: {db_path}")
+
+
+def cmd_migrate(args):
+    """Migrate legacy cache entries to new float16 format."""
+    import sqlite3
+    import msgpack
+    import numpy as np
+
+    # Determine database path
+    if args.path:
+        db_path = Path(args.path)
+    else:
+        cache_dir = get_cache_dir()
+        db_path = cache_dir / "cache.db"
+
+    if not db_path.exists():
+        print(f"Database not found: {db_path}")
+        sys.exit(1)
+
+    print(f"Migrating: {db_path}")
+
+    conn = sqlite3.connect(db_path)
+
+    # Count legacy entries
+    cursor = conn.execute("SELECT COUNT(*) FROM embeddings WHERE dtype IS NULL")
+    total = cursor.fetchone()[0]
+
+    if total == 0:
+        print("No legacy entries to migrate.")
+        conn.close()
+        return
+
+    print(f"Found {total} legacy entries to migrate.")
+
+    batch_size = args.batch_size
+    migrated = 0
+
+    while True:
+        # Fetch batch of legacy entries
+        cursor = conn.execute("""
+            SELECT cache_key, embedding FROM embeddings
+            WHERE dtype IS NULL LIMIT ?
+        """, (batch_size,))
+        rows = cursor.fetchall()
+
+        if not rows:
+            break
+
+        # Migrate batch in transaction
+        for cache_key, blob in rows:
+            try:
+                # Deserialize legacy msgpack
+                embedding_list = msgpack.unpackb(blob)
+                embedding = np.array(embedding_list, dtype=np.float32)
+
+                # Serialize to new format (little-endian float16)
+                embedding_f16 = embedding.astype("<f2")
+                new_blob = embedding_f16.tobytes()
+
+                conn.execute("""
+                    UPDATE embeddings
+                    SET embedding = ?, dimensions = ?, dtype = 'float16'
+                    WHERE cache_key = ?
+                """, (new_blob, len(embedding), cache_key))
+            except Exception as e:
+                print(f"Warning: Failed to migrate {cache_key}: {e}")
+
+        conn.commit()
+        migrated += len(rows)
+        print(f"Migrated {migrated}/{total} entries...")
+
+    conn.close()
+    print(f"Migration complete. {migrated} entries converted.")
 
 
 def cmd_preseed_status(args):
@@ -156,6 +250,19 @@ def main():
     clear_parser = subparsers.add_parser("clear", help="Clear the cache")
     clear_parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
     clear_parser.set_defaults(func=cmd_clear)
+
+    # migrate command
+    migrate_parser = subparsers.add_parser(
+        "migrate", help="Migrate legacy entries to float16 format"
+    )
+    migrate_parser.add_argument(
+        "--path", help="Path to database (default: user cache)"
+    )
+    migrate_parser.add_argument(
+        "--batch-size", type=int, default=100,
+        help="Entries per batch (default: 100)"
+    )
+    migrate_parser.set_defaults(func=cmd_migrate)
 
     # preseed command group
     preseed_parser = subparsers.add_parser("preseed", help="Manage preseed database")

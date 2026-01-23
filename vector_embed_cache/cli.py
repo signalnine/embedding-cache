@@ -50,15 +50,20 @@ def cmd_stats(args):
         import sqlite3
         conn = sqlite3.connect(db_path)
 
+        # Check if dtype column exists (legacy database)
+        cursor = conn.execute("PRAGMA table_info(embeddings)")
+        columns = {row[1] for row in cursor.fetchall()}
+        has_dtype = "dtype" in columns
+
         # Total count
         cursor = conn.execute("SELECT COUNT(*) FROM embeddings")
         total = cursor.fetchone()[0]
         print(f"Total entries: {total}")
 
-        if total > 0:
+        if total > 0 and has_dtype:
             # Count by format
             cursor = conn.execute(
-                "SELECT COUNT(*) FROM embeddings WHERE dtype IS NOT NULL"
+                "SELECT COUNT(*) FROM embeddings WHERE dtype IS NOT NULL AND dtype != 'failed'"
             )
             new_format = cursor.fetchone()[0]
             legacy = total - new_format
@@ -69,6 +74,8 @@ def cmd_stats(args):
             if legacy > 0:
                 pct = (legacy / total) * 100
                 print(f"  - Legacy format: {legacy} ({pct:.0f}%)")
+        elif total > 0:
+            print(f"  - Legacy format: {total} (100%)")
 
         conn.close()
     except Exception as e:
@@ -114,11 +121,28 @@ def cmd_clear(args):
     print(f"Deleted: {db_path}")
 
 
+def _ensure_schema_columns(conn):
+    """Ensure dimensions and dtype columns exist (for legacy databases)."""
+    cursor = conn.execute("PRAGMA table_info(embeddings)")
+    columns = {row[1] for row in cursor.fetchall()}
+
+    if "dimensions" not in columns:
+        conn.execute("ALTER TABLE embeddings ADD COLUMN dimensions INTEGER")
+    if "dtype" not in columns:
+        conn.execute("ALTER TABLE embeddings ADD COLUMN dtype TEXT")
+    conn.commit()
+
+
 def cmd_migrate(args):
     """Migrate legacy cache entries to new float16 format."""
     import sqlite3
     import msgpack
     import numpy as np
+
+    # Validate batch size
+    if args.batch_size <= 0:
+        print("Error: batch-size must be positive")
+        sys.exit(1)
 
     # Determine database path
     if args.path:
@@ -135,6 +159,9 @@ def cmd_migrate(args):
 
     conn = sqlite3.connect(db_path)
 
+    # Ensure schema has new columns (for legacy databases)
+    _ensure_schema_columns(conn)
+
     # Count legacy entries
     cursor = conn.execute("SELECT COUNT(*) FROM embeddings WHERE dtype IS NULL")
     total = cursor.fetchone()[0]
@@ -148,6 +175,7 @@ def cmd_migrate(args):
 
     batch_size = args.batch_size
     migrated = 0
+    failed = 0
 
     while True:
         # Fetch batch of legacy entries
@@ -159,6 +187,9 @@ def cmd_migrate(args):
 
         if not rows:
             break
+
+        batch_migrated = 0
+        batch_failed = 0
 
         # Migrate batch in transaction
         for cache_key, blob in rows:
@@ -176,15 +207,27 @@ def cmd_migrate(args):
                     SET embedding = ?, dimensions = ?, dtype = 'float16'
                     WHERE cache_key = ?
                 """, (new_blob, len(embedding), cache_key))
+                batch_migrated += 1
             except Exception as e:
+                # Mark as failed to prevent infinite loop
+                conn.execute("""
+                    UPDATE embeddings
+                    SET dtype = 'failed'
+                    WHERE cache_key = ?
+                """, (cache_key,))
                 print(f"Warning: Failed to migrate {cache_key}: {e}")
+                batch_failed += 1
 
         conn.commit()
-        migrated += len(rows)
+        migrated += batch_migrated
+        failed += batch_failed
         print(f"Migrated {migrated}/{total} entries...")
 
     conn.close()
-    print(f"Migration complete. {migrated} entries converted.")
+    if failed > 0:
+        print(f"Migration complete. {migrated} entries converted, {failed} failed.")
+    else:
+        print(f"Migration complete. {migrated} entries converted.")
 
 
 def cmd_preseed_status(args):

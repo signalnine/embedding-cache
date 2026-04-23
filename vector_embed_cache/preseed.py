@@ -1,6 +1,7 @@
 """Pre-seeded embeddings lookup."""
 
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -40,8 +41,13 @@ class PreseedStorage:
         Args:
             db_path: Path to preseed SQLite database
         """
-        # Open in read-only mode
-        self._conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        # Open in read-only mode. check_same_thread=False lets threads other
+        # than the creator call get(); the lock below serializes access so
+        # the single shared connection stays consistent.
+        self._conn = sqlite3.connect(
+            f"file:{db_path}?mode=ro", uri=True, check_same_thread=False
+        )
+        self._lock = threading.Lock()
         self.set = None  # Explicitly disable writes
 
     def get(self, cache_key: str) -> Optional[np.ndarray]:
@@ -53,12 +59,13 @@ class PreseedStorage:
         Returns:
             Embedding array or None if not found
         """
-        cursor = self._conn.cursor()
-        cursor.execute(
-            "SELECT embedding FROM embeddings WHERE cache_key = ?",
-            (cache_key,),
-        )
-        row = cursor.fetchone()
+        with self._lock:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                "SELECT embedding FROM embeddings WHERE cache_key = ?",
+                (cache_key,),
+            )
+            row = cursor.fetchone()
 
         if row is None:
             return None
@@ -70,7 +77,8 @@ class PreseedStorage:
 
     def close(self):
         """Close database connection."""
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
 
     def __enter__(self):
         """Context manager entry."""

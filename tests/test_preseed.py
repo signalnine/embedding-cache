@@ -130,6 +130,35 @@ class TestPreseedStorage:
         # Connection is closed - further operations would fail
         # but we don't need to verify that explicitly
 
+    def test_preseed_storage_concurrent_access(self, temp_preseed_db):
+        """PreseedStorage.get must work from threads other than the creating thread."""
+        import threading
+
+        from vector_embed_cache.preseed import PreseedStorage
+
+        storage = PreseedStorage(temp_preseed_db)
+
+        errors = []
+        results = []
+
+        def worker():
+            try:
+                results.append(storage.get("test_key"))
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert errors == [], f"Concurrent get() raised: {errors}"
+        assert len(results) == 8
+        for r in results:
+            assert r is not None
+            np.testing.assert_array_almost_equal(r, [0.1, 0.2, 0.3])
+
 
 class TestPreseedIntegration:
     def test_stats_track_preseed_hits(self, tmp_path):

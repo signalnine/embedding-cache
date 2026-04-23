@@ -1,0 +1,2 @@
+{"id":"int-e346d788","kind":"field_change","created_at":"2026-04-23T08:55:57.289174496Z","actor":"Gabe Ortiz","issue_id":"embedding-cache-4u9","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
+{"id":"int-31038610","kind":"field_change","created_at":"2026-04-23T08:57:04.969252556Z","actor":"Gabe Ortiz","issue_id":"embedding-cache-4u9","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"done"}}

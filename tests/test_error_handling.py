@@ -74,6 +74,27 @@ def test_list_with_empty_strings(temp_cache_dir):
         cache.embed(["hello", "", "world"])
 
 
+def test_whitespace_only_string_rejected(temp_cache_dir):
+    """Whitespace-only strings normalize to empty and must be rejected.
+
+    Consistency check: if '' is rejected, then '   ', '\\t\\n', etc. must
+    also be rejected since they all produce an empty cache key post-normalize.
+    """
+    cache = EmbeddingCache(cache_dir=temp_cache_dir)
+
+    for whitespace in ["   ", "\t", "\n", " \t\n ", "\r\n"]:
+        with pytest.raises(ValueError, match="cannot be empty"):
+            cache.embed(whitespace)
+
+
+def test_whitespace_only_in_list_rejected(temp_cache_dir):
+    """Lists containing whitespace-only strings must be rejected."""
+    cache = EmbeddingCache(cache_dir=temp_cache_dir)
+
+    with pytest.raises(ValueError, match="cannot be empty"):
+        cache.embed(["hello", "   ", "world"])
+
+
 def test_remote_fallback_on_local_failure(temp_cache_dir, mocker):
     """Test that remote provider is used when local provider fails."""
     # Create cache with remote URL configured

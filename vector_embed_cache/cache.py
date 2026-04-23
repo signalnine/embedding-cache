@@ -90,21 +90,21 @@ class EmbeddingCache:
             text: String or list of strings to validate
 
         Raises:
-            ValueError: If text is None or empty string
+            ValueError: If text is None, empty, or whitespace-only
             TypeError: If text is not string or list of strings
         """
         if text is None:
             raise ValueError("Text cannot be None")
 
         if isinstance(text, str):
-            if text == "":
-                raise ValueError("Text cannot be empty string")
+            if text.strip() == "":
+                raise ValueError("Text cannot be empty or whitespace-only")
         elif isinstance(text, list):
             for item in text:
                 if not isinstance(item, str):
                     raise TypeError(f"All items in list must be strings, got {type(item).__name__}")
-                if item == "":
-                    raise ValueError("Text cannot be empty string")
+                if item.strip() == "":
+                    raise ValueError("Text cannot be empty or whitespace-only")
         else:
             raise TypeError(f"Text must be string or list of strings, got {type(text).__name__}")
 

@@ -167,7 +167,7 @@ class EmbeddingCache:
                         logger.debug("Using local provider")
                         return self.local_provider.embed(text)
                     else:
-                        logger.warning("Local provider not available (sentence-transformers not installed)")
+                        logger.warning(self._local_unavailable_message())
                         continue
 
                 elif provider_name == "remote":
@@ -187,7 +187,24 @@ class EmbeddingCache:
 
         # All providers failed
         raise RuntimeError(
-            "All embedding providers failed. "
+            f"All embedding providers failed. {self._install_hint()}"
+        )
+
+    def _is_openai_provider(self) -> bool:
+        return isinstance(self.local_provider, OpenAIProvider)
+
+    def _local_unavailable_message(self) -> str:
+        if self._is_openai_provider():
+            return "OpenAI provider not available (openai package not installed or OPENAI_API_KEY not set)"
+        return "Local provider not available (sentence-transformers not installed)"
+
+    def _install_hint(self) -> str:
+        if self._is_openai_provider():
+            return (
+                "Install openai (pip install embedding-cache[openai]) "
+                "and set OPENAI_API_KEY, or configure a remote backend."
+            )
+        return (
             "Install sentence-transformers (pip install embedding-cache[local]) "
             "or configure a remote backend."
         )

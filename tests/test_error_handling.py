@@ -95,6 +95,27 @@ def test_whitespace_only_in_list_rejected(temp_cache_dir):
         cache.embed(["hello", "   ", "world"])
 
 
+def test_openai_provider_unavailable_error_mentions_openai(temp_cache_dir, mocker):
+    """When OpenAI model is configured but unavailable, error must guide toward OpenAI, not sentence-transformers."""
+    cache = EmbeddingCache(
+        cache_dir=temp_cache_dir,
+        model="openai:text-embedding-3-small",
+    )
+    cache.preseed_storage = None
+
+    # Simulate missing API key / openai package
+    mocker.patch.object(cache.local_provider, "is_available", return_value=False)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        cache.embed("hello")
+
+    message = str(exc_info.value)
+    # Must reference OpenAI configuration
+    assert "openai" in message.lower() or "OPENAI_API_KEY" in message
+    # Must NOT misdirect the user to install sentence-transformers
+    assert "sentence-transformers" not in message
+
+
 def test_remote_fallback_on_local_failure(temp_cache_dir, mocker):
     """Test that remote provider is used when local provider fails."""
     # Create cache with remote URL configured

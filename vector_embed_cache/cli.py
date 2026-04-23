@@ -61,12 +61,20 @@ def cmd_stats(args):
         print(f"Total entries: {total}")
 
         if total > 0 and has_dtype:
-            # Count by format
+            # Count each category explicitly so failed migrations do not
+            # inflate the legacy count.
             cursor = conn.execute(
                 "SELECT COUNT(*) FROM embeddings WHERE dtype IS NOT NULL AND dtype != 'failed'"
             )
             new_format = cursor.fetchone()[0]
-            legacy = total - new_format
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM embeddings WHERE dtype IS NULL"
+            )
+            legacy = cursor.fetchone()[0]
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM embeddings WHERE dtype = 'failed'"
+            )
+            failed = cursor.fetchone()[0]
 
             if new_format > 0:
                 pct = (new_format / total) * 100
@@ -74,6 +82,9 @@ def cmd_stats(args):
             if legacy > 0:
                 pct = (legacy / total) * 100
                 print(f"  - Legacy format: {legacy} ({pct:.0f}%)")
+            if failed > 0:
+                pct = (failed / total) * 100
+                print(f"  - Failed: {failed} ({pct:.0f}%)")
         elif total > 0:
             print(f"  - Legacy format: {total} (100%)")
 

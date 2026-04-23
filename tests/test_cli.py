@@ -198,3 +198,55 @@ class TestMigrateCLI:
         assert result.returncode == 0
         assert "New format (float16): 2" in result.stdout
         assert "Legacy format: 1" in result.stdout
+
+    def test_stats_counts_failed_separately_from_legacy(self, temp_cache_dir):
+        """Failed migration entries must not inflate the legacy count."""
+        import sqlite3
+        from pathlib import Path
+
+        db_path = Path(temp_cache_dir) / "cache.db"
+
+        conn = sqlite3.connect(db_path)
+        conn.execute("""
+            CREATE TABLE embeddings (
+                cache_key TEXT PRIMARY KEY,
+                model TEXT NOT NULL,
+                embedding BLOB NOT NULL,
+                dimensions INTEGER,
+                dtype TEXT,
+                created_at INTEGER NOT NULL,
+                access_count INTEGER DEFAULT 1,
+                last_accessed INTEGER NOT NULL
+            )
+        """)
+        # 1 new, 1 legacy (dtype NULL), 2 failed
+        conn.execute("""
+            INSERT INTO embeddings VALUES
+            ('new1', 'model', X'00000000', 2, 'float16', 0, 1, 0)
+        """)
+        conn.execute("""
+            INSERT INTO embeddings VALUES
+            ('legacy1', 'model', X'00', NULL, NULL, 0, 1, 0)
+        """)
+        for i in range(2):
+            conn.execute("""
+                INSERT INTO embeddings VALUES
+                (?, 'model', X'00', NULL, 'failed', 0, 1, 0)
+            """, (f"failed{i}",))
+        conn.commit()
+        conn.close()
+
+        import os
+        env = os.environ.copy()
+        env["EMBEDDING_CACHE_DIR"] = temp_cache_dir
+
+        result = subprocess.run(
+            [sys.executable, "-m", "vector_embed_cache.cli", "stats"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert result.returncode == 0
+        assert "New format (float16): 1" in result.stdout
+        assert "Legacy format: 1" in result.stdout
+        assert "Failed: 2" in result.stdout

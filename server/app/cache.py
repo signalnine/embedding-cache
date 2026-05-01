@@ -1,6 +1,6 @@
 # server/app/cache.py
 import struct
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -56,7 +56,7 @@ def get_cached_embedding(
     if embedding:
         # Update hit stats
         embedding.hit_count += 1
-        embedding.last_hit_at = datetime.utcnow()
+        embedding.last_hit_at = datetime.now(timezone.utc)
         db.commit()
         return bytes_to_vector(embedding.vector)
 

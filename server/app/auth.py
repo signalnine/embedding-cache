@@ -1,7 +1,7 @@
 # server/app/auth.py
 import bcrypt
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import HTTPException, Header, Depends
 from sqlalchemy.orm import Session
@@ -23,10 +23,11 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def create_jwt(user_id: str) -> str:
     """Create a JWT token for a user."""
+    now = datetime.now(timezone.utc)
     payload = {
         "user_id": user_id,
-        "exp": datetime.utcnow() + timedelta(seconds=settings.jwt_expiry_seconds),
-        "iat": datetime.utcnow(),
+        "exp": now + timedelta(seconds=settings.jwt_expiry_seconds),
+        "iat": now,
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
@@ -64,7 +65,7 @@ async def get_current_api_key(
         raise HTTPException(status_code=401, detail="Invalid or revoked API key")
 
     # Update last_used_at
-    api_key.last_used_at = datetime.utcnow()
+    api_key.last_used_at = datetime.now(timezone.utc)
     db.commit()
 
     return api_key

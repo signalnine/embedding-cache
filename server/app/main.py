@@ -18,7 +18,8 @@ from app.admin_auth import verify_admin_jwt, verify_csrf_token
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup: fail fast if required secrets are missing
+    settings.validate_secrets()
     Base.metadata.create_all(bind=engine)
     yield
     # Shutdown
@@ -31,6 +32,23 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def payload_size_middleware(request: Request, call_next):
+    """Reject requests whose body exceeds settings.max_payload_bytes with HTTP 413."""
+    if request.method in ("POST", "PUT", "PATCH"):
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                if int(content_length) > settings.max_payload_bytes:
+                    return JSONResponse(
+                        {"detail": f"Request body exceeds max size of {settings.max_payload_bytes} bytes"},
+                        status_code=413,
+                    )
+            except ValueError:
+                pass
+    return await call_next(request)
 
 
 @app.middleware("http")

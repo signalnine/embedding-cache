@@ -47,10 +47,24 @@ class EmbedResponse(BaseModel):
     dimensions: int
 
 
+MAX_TEXT_LENGTH = 10000
+
+
 class BatchEmbedRequest(BaseModel):
     texts: list[str] = Field(min_length=1, max_length=100)
     model: str = "nomic-v1.5"
     public: bool = False
+
+    @model_validator(mode="after")
+    def validate_text_lengths(self):
+        for i, t in enumerate(self.texts):
+            if len(t) < 1:
+                raise ValueError(f"texts[{i}] must be at least 1 character")
+            if len(t) > MAX_TEXT_LENGTH:
+                raise ValueError(
+                    f"texts[{i}] exceeds max length of {MAX_TEXT_LENGTH} characters"
+                )
+        return self
 
 
 class BatchEmbedResponse(BaseModel):

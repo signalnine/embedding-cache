@@ -1,7 +1,42 @@
 # server/tests/test_schemas.py
 import pytest
 from pydantic import ValidationError
-from app.schemas import SearchRequest, SearchResponse, SearchResult
+from app.schemas import (
+    BatchEmbedRequest,
+    MAX_TEXT_LENGTH,
+    SearchRequest,
+    SearchResponse,
+    SearchResult,
+)
+
+
+class TestBatchEmbedRequest:
+    def test_accepts_valid_texts(self):
+        req = BatchEmbedRequest(texts=["hello", "world"])
+        assert req.texts == ["hello", "world"]
+
+    def test_rejects_empty_text_in_list(self):
+        with pytest.raises(ValidationError):
+            BatchEmbedRequest(texts=["hello", ""])
+
+    def test_rejects_oversize_text_in_list(self):
+        oversize = "a" * (MAX_TEXT_LENGTH + 1)
+        with pytest.raises(ValidationError) as exc:
+            BatchEmbedRequest(texts=["ok", oversize])
+        assert "max length" in str(exc.value).lower()
+
+    def test_accepts_text_at_max_length(self):
+        at_limit = "a" * MAX_TEXT_LENGTH
+        req = BatchEmbedRequest(texts=[at_limit])
+        assert len(req.texts[0]) == MAX_TEXT_LENGTH
+
+    def test_rejects_too_few_items(self):
+        with pytest.raises(ValidationError):
+            BatchEmbedRequest(texts=[])
+
+    def test_rejects_too_many_items(self):
+        with pytest.raises(ValidationError):
+            BatchEmbedRequest(texts=["x"] * 101)
 
 
 class TestSearchRequest:

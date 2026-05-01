@@ -82,10 +82,10 @@ def test_cache_embed_batch():
             "test": np.array([0.5, 0.6], dtype=np.float32)
         }
 
-        def mock_embed(text):
-            return embeddings_map[text]
+        def mock_embed_batch(texts):
+            return [embeddings_map[t] for t in texts]
 
-        cache.local_provider.embed = Mock(side_effect=mock_embed)
+        cache.local_provider.embed_batch = Mock(side_effect=mock_embed_batch)
 
         texts = ["hello", "world", "test"]
         results = cache.embed(texts)
@@ -213,6 +213,91 @@ def test_cache_selects_openai_provider():
 
     assert isinstance(cache.local_provider, OpenAIProvider)
     assert cache.local_provider.model_name == "text-embedding-3-small"
+
+
+def test_embed_list_uses_batched_provider_call():
+    """A list of N uncached texts should produce ONE provider.embed_batch call."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cache = EmbeddingCache(cache_dir=tmpdir)
+        cache.preseed_storage = None  # Disable preseed so all are misses
+
+        texts = [f"unique-text-{i}" for i in range(5)]
+        embeddings = [np.array([i, i + 0.1, i + 0.2], dtype=np.float32) for i in range(5)]
+
+        cache.local_provider.embed_batch = Mock(return_value=embeddings)
+        cache.local_provider.embed = Mock(side_effect=AssertionError("embed() must not be called for list input"))
+
+        results = cache.embed(texts)
+
+        # Exactly one batched call covering all 5 texts
+        assert cache.local_provider.embed_batch.call_count == 1
+        called_with = cache.local_provider.embed_batch.call_args[0][0]
+        assert len(called_with) == 5
+        assert results is not None
+        assert len(results) == 5
+        assert cache.stats["misses"] == 5
+        assert cache.stats["hits"] == 0
+
+
+def test_embed_list_mixed_cached_and_uncached_batches_only_misses():
+    """With some cached and some uncached, embed_batch is called once with only the misses."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cache = EmbeddingCache(cache_dir=tmpdir)
+        cache.preseed_storage = None
+
+        # Pre-populate cache with two entries by computing them once with batch
+        existing = ["already-cached-a", "already-cached-b"]
+        cache.local_provider.embed_batch = Mock(
+            return_value=[
+                np.array([1.0, 2.0, 3.0], dtype=np.float32),
+                np.array([4.0, 5.0, 6.0], dtype=np.float32),
+            ]
+        )
+        cache.embed(existing)
+        assert cache.local_provider.embed_batch.call_count == 1
+
+        # Now mix two cached + two new texts
+        new_texts = ["fresh-1", "fresh-2"]
+        cache.local_provider.embed_batch = Mock(
+            return_value=[
+                np.array([7.0, 8.0, 9.0], dtype=np.float32),
+                np.array([10.0, 11.0, 12.0], dtype=np.float32),
+            ]
+        )
+
+        mixed = [existing[0], new_texts[0], existing[1], new_texts[1]]
+        results = cache.embed(mixed)
+
+        # Exactly one batched call, containing only the two misses
+        assert cache.local_provider.embed_batch.call_count == 1
+        called_with = cache.local_provider.embed_batch.call_args[0][0]
+        assert len(called_with) == 2
+        assert len(results) == 4
+        assert cache.stats["hits"] == 2
+        # 2 misses from the initial seed + 2 from the mixed call
+        assert cache.stats["misses"] == 4
+
+
+def test_embed_list_all_cached_makes_no_provider_call():
+    """When all list items are cached, the provider is not invoked."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cache = EmbeddingCache(cache_dir=tmpdir)
+        cache.preseed_storage = None
+
+        seed = ["a", "b", "c"]
+        cache.local_provider.embed_batch = Mock(
+            return_value=[np.array([float(i)], dtype=np.float32) for i in range(3)]
+        )
+        cache.embed(seed)
+        assert cache.local_provider.embed_batch.call_count == 1
+
+        # Reset mock; second call should not invoke provider
+        cache.local_provider.embed_batch = Mock(side_effect=AssertionError("should not be called"))
+        cache.local_provider.embed = Mock(side_effect=AssertionError("should not be called"))
+
+        results = cache.embed(seed)
+        assert len(results) == 3
+        assert cache.stats["hits"] == 3
 
 
 def test_cache_selects_local_provider_for_nomic():

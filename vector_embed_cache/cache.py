@@ -149,7 +149,7 @@ class EmbeddingCache:
         return embedding
 
     def _compute_embedding(self, text: str) -> np.ndarray:
-        """Compute embedding using fallback chain.
+        """Compute embedding for a single text using fallback chain.
 
         Args:
             text: Normalized text
@@ -185,7 +185,50 @@ class EmbeddingCache:
                 logger.warning(f"Provider {provider_name} failed: {e}")
                 continue
 
-        # All providers failed
+        raise RuntimeError(
+            f"All embedding providers failed. {self._install_hint()}"
+        )
+
+    def _compute_embeddings_batch(self, texts: List[str]) -> List[np.ndarray]:
+        """Compute embeddings for a batch using fallback chain.
+
+        Issues a single provider.embed_batch() call per attempt rather than
+        N separate provider.embed() calls.
+
+        Args:
+            texts: List of normalized texts
+
+        Returns:
+            List of embedding vectors, in input order
+
+        Raises:
+            RuntimeError: If all providers fail
+        """
+        for provider_name in self.fallback_providers:
+            try:
+                if provider_name == "local":
+                    if self.local_provider.is_available():
+                        logger.debug("Using local provider (batch)")
+                        return self.local_provider.embed_batch(texts)
+                    else:
+                        logger.warning(self._local_unavailable_message())
+                        continue
+
+                elif provider_name == "remote":
+                    if self.remote_provider is not None:
+                        logger.debug("Using remote provider (batch)")
+                        embeddings = self.remote_provider.embed_batch(texts)
+                        with self._stats_lock:
+                            self.stats["remote_hits"] += len(texts)
+                        return embeddings
+                    else:
+                        logger.warning("Remote provider not configured")
+                        continue
+
+            except Exception as e:
+                logger.warning(f"Provider {provider_name} failed: {e}")
+                continue
+
         raise RuntimeError(
             f"All embedding providers failed. {self._install_hint()}"
         )
@@ -209,6 +252,56 @@ class EmbeddingCache:
             "or configure a remote backend."
         )
 
+    def _get_embeddings(self, texts: List[str]) -> List[np.ndarray]:
+        """Get embeddings for a list of texts using batched provider call for misses.
+
+        Per-key cache reads/writes still happen individually so stats and storage
+        rows remain accurate, but uncached texts are computed in a single batched
+        provider call rather than N separate calls.
+
+        Args:
+            texts: List of input texts
+
+        Returns:
+            List of embedding vectors, in input order
+        """
+        results: List[Optional[np.ndarray]] = [None] * len(texts)
+        miss_indices: List[int] = []
+        miss_normalized: List[str] = []
+
+        for i, text in enumerate(texts):
+            normalized = normalize_text(text)
+            cache_key = generate_cache_key(normalized, self.model)
+
+            cached = self.storage.get(cache_key)
+            if cached is not None:
+                with self._stats_lock:
+                    self.stats["hits"] += 1
+                results[i] = cached
+                continue
+
+            if self.preseed_storage is not None:
+                preseed_result = self.preseed_storage.get(cache_key)
+                if preseed_result is not None:
+                    with self._stats_lock:
+                        self.stats["preseed_hits"] += 1
+                    results[i] = preseed_result
+                    continue
+
+            with self._stats_lock:
+                self.stats["misses"] += 1
+            miss_indices.append(i)
+            miss_normalized.append(normalized)
+
+        if miss_normalized:
+            computed = self._compute_embeddings_batch(miss_normalized)
+            for idx, normalized, embedding in zip(miss_indices, miss_normalized, computed):
+                cache_key = generate_cache_key(normalized, self.model)
+                self.storage.set(cache_key, self.model, embedding)
+                results[idx] = embedding
+
+        return results  # type: ignore[return-value]
+
     def embed(self, text: Union[str, List[str]]) -> Union[np.ndarray, List[np.ndarray]]:
         """Embed text or list of texts.
 
@@ -227,4 +320,4 @@ class EmbeddingCache:
         if isinstance(text, str):
             return self._get_embedding(text)
         else:
-            return [self._get_embedding(t) for t in text]
+            return self._get_embeddings(text)

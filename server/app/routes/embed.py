@@ -26,10 +26,7 @@ async def embed(
     db: Session = Depends(get_db),
 ):
     """Get embedding for text."""
-    # Check rate limit
-    await check_rate_limit(api_key.user_id, api_key.tier)
-
-    # Check cache
+    # Check cache first so cached results don't consume rate budget.
     text_hash = generate_text_hash(request.text)
     cached = get_cached_embedding(
         db=db,
@@ -46,7 +43,9 @@ async def embed(
             dimensions=len(cached),
         )
 
-    # Cache miss - compute embedding
+    # Cache miss - charge rate limit and compute embedding.
+    await check_rate_limit(api_key.user_id, api_key.tier)
+
     if api_key.tier == "paid":
         # Use local GPU
         embedding = await compute_embedding(request.text, request.model)
@@ -100,10 +99,6 @@ async def embed_batch(
             detail=f"Batch size exceeds limit of {settings.max_batch_size}"
         )
 
-    # Check rate limit (counts as N requests)
-    for _ in request.texts:
-        await check_rate_limit(api_key.user_id, api_key.tier)
-
     embeddings = []
     cached_flags = []
 
@@ -129,6 +124,12 @@ async def embed_batch(
             cached_flags.append(False)
             texts_to_compute.append(text)
             indices_to_compute.append(i)
+
+    # Charge rate limit only for the actual compute count, atomically.
+    # If this would exceed the limit, RateLimitExceeded is raised before any
+    # work is done and the counter is rolled back so no partial charge sticks.
+    if texts_to_compute:
+        await check_rate_limit(api_key.user_id, api_key.tier, count=len(texts_to_compute))
 
     # Compute missing embeddings
     if texts_to_compute:

@@ -13,13 +13,28 @@ class RateLimitExceeded(HTTPException):
         )
 
 
-async def check_rate_limit(user_id: str, tier: str) -> bool:
-    """Check if user is within rate limit.
+async def check_rate_limit(user_id: str, tier: str, count: int = 1) -> bool:
+    """Check if user is within rate limit, charging `count` against the daily quota.
 
-    Raises RateLimitExceeded if over limit.
-    Returns True if allowed.
-    Skips rate limiting if Redis is not configured.
+    The increment is applied atomically: if it would exceed the limit, the
+    counter is rolled back to its prior value and RateLimitExceeded is raised.
+
+    Args:
+        user_id: User identifier
+        tier: "paid" or "free"
+        count: Number of units to charge (default 1)
+
+    Raises:
+        RateLimitExceeded: If charging `count` would exceed the daily limit.
+
+    Returns:
+        True if charged successfully.
+
+    Skips rate limiting if Redis is not configured or if count is 0.
     """
+    if count <= 0:
+        return True
+
     redis = await get_redis()
 
     # Skip rate limiting if Redis is not configured
@@ -29,15 +44,17 @@ async def check_rate_limit(user_id: str, tier: str) -> bool:
     today = date.today().isoformat()
     key = f"rate:{user_id}:{today}"
 
-    count = await redis.incr(key)
+    new_count = await redis.incrby(key, count)
 
     # Set expiry on first request of the day
-    if count == 1:
+    if new_count == count:
         await redis.expire(key, 86400)
 
     limit = settings.paid_tier_daily_limit if tier == "paid" else settings.free_tier_daily_limit
 
-    if count > limit:
+    if new_count > limit:
+        # Roll back the increment so partial charges don't stick.
+        await redis.decrby(key, count)
         raise RateLimitExceeded(limit=limit, reset_time=f"{today} 00:00 UTC")
 
     return True

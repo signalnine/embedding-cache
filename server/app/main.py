@@ -71,14 +71,28 @@ async def csrf_middleware(request: Request, call_next):
     return await call_next(request)
 
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS: per spec, allow_origins='*' is incompatible with allow_credentials=True.
+# When CORS_ALLOWED_ORIGINS is set, use the explicit list with credentials enabled
+# (required for the admin dashboard's cookie-based auth from another origin).
+# When unset, fall back to a permissive wildcard without credentials so public
+# API consumers still work cross-origin.
+_cors_origins = settings.cors_origins_list
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Session middleware (for flash messages)
 app.add_middleware(

@@ -20,8 +20,20 @@ class Settings(BaseSettings):
     max_batch_size: int = 100
     max_payload_bytes: int = 1_000_000
 
+    # CORS: comma-separated list of trusted origins for credentialed requests.
+    # Empty default disables credentialed cross-origin access (wildcard origin
+    # with credentials is invalid per the CORS spec).
+    cors_allowed_origins: str = ""
+
     class Config:
         env_file = ".env"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse cors_allowed_origins into a list, stripping whitespace."""
+        if not self.cors_allowed_origins.strip():
+            return []
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
 
     def validate_secrets(self) -> None:
         """Validate that required secrets are configured.

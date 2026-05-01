@@ -202,6 +202,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - **BYOK Security**: API keys encrypted at rest with Fernet, SSRF protection on endpoints
 - **Rate Limiting**: Redis-based daily counters (gracefully degrades without Redis)
 - **Composite Primary Key**: (text_hash, model, model_version, tenant_id) for versioned caching
+- **CORS**: `CORS_ALLOWED_ORIGINS` (comma-separated) controls credentialed cross-origin access for the cookie-based admin dashboard. When set, those origins are echoed back with `allow_credentials=True`. When unset, the API serves a wildcard origin without credentials (per CORS spec, wildcard + credentials is invalid). Set this env var to your admin dashboard origin in any deployment that uses cookie auth from a different host.
 
 **Similarity Search (pgvector):**
 - Hash-partitioned embeddings table (32 partitions by tenant_id)

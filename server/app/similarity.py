@@ -96,6 +96,7 @@ class SearchParams:
     dimensions: int
     top_k: int
     min_score: Optional[float]
+    include_vectors: bool = False
 
 
 async def similarity_search(db: Any, params: SearchParams) -> list[dict]:
@@ -121,6 +122,10 @@ async def similarity_search(db: Any, params: SearchParams) -> list[dict]:
     dim = params.dimensions
     assert dim in SUPPORTED_DIMENSIONS, "Dimension bypass attempt"
 
+    vector_select = (
+        f", vector::vector({dim}) as vector" if params.include_vectors else ""
+    )
+
     async with db.transaction():
         await db.execute("SET LOCAL hnsw.ef_search = 40")
 
@@ -133,7 +138,7 @@ async def similarity_search(db: Any, params: SearchParams) -> list[dict]:
                 original_text,
                 model,
                 (-(vector::vector({dim}) <#> $1::vector({dim})) + 1) / 2 as score,
-                hit_count
+                hit_count{vector_select}
             FROM embeddings
             WHERE tenant_id = $2
               AND dimensions = $5
@@ -151,8 +156,30 @@ async def similarity_search(db: Any, params: SearchParams) -> list[dict]:
             params.dimensions  # $5 - parameterized for WHERE clause
         )
 
+    if params.include_vectors:
+        # pgvector returns the vector as a string like "[0.1,0.2,...]"; convert
+        # to list[float] for the API response. asyncpg may also return tuples
+        # when a vector type codec is registered, so handle both shapes.
+        results = [_with_vector_as_list(r) for r in results]
+
     # Apply min_score filter if specified (post-query for simplicity)
     if params.min_score is not None:
         results = [r for r in results if r['score'] >= params.min_score]
 
     return results
+
+
+def _with_vector_as_list(row: dict) -> dict:
+    raw = row.get("vector")
+    if raw is None:
+        return row
+    if isinstance(raw, str):
+        s = raw.strip()
+        if s.startswith("[") and s.endswith("]"):
+            inner = s[1:-1]
+            parsed = [float(x) for x in inner.split(",")] if inner else []
+        else:
+            parsed = [float(x) for x in s.split(",")] if s else []
+    else:
+        parsed = list(raw)
+    return {**row, "vector": parsed}

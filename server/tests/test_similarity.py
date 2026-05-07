@@ -116,6 +116,86 @@ class TestSimilaritySearch:
             await similarity_search(mock_db, params)
         assert "Unsupported dimension" in str(exc.value)
 
+    # bd: embedding-cache-gff -- include_vectors must actually SELECT the
+    # vector column and convert pgvector text output to list[float].
+
+    @pytest.mark.asyncio
+    async def test_include_vectors_adds_vector_to_select(self):
+        mock_db = AsyncMock()
+        mock_db.fetch = AsyncMock(return_value=[])
+        mock_transaction = AsyncMock()
+        mock_transaction.__aenter__ = AsyncMock(return_value=mock_transaction)
+        mock_transaction.__aexit__ = AsyncMock(return_value=None)
+        mock_db.transaction = MagicMock(return_value=mock_transaction)
+
+        params = SearchParams(
+            query_vector=make_normalized_vector(768),
+            tenant_id="tenant-123",
+            model="nomic-v1.5",
+            dimensions=768,
+            top_k=10,
+            min_score=None,
+            include_vectors=True,
+        )
+        await similarity_search(mock_db, params)
+
+        query = mock_db.fetch.call_args[0][0]
+        assert "vector::vector(768) as vector" in query
+
+    @pytest.mark.asyncio
+    async def test_include_vectors_false_omits_vector_select(self):
+        mock_db = AsyncMock()
+        mock_db.fetch = AsyncMock(return_value=[])
+        mock_transaction = AsyncMock()
+        mock_transaction.__aenter__ = AsyncMock(return_value=mock_transaction)
+        mock_transaction.__aexit__ = AsyncMock(return_value=None)
+        mock_db.transaction = MagicMock(return_value=mock_transaction)
+
+        params = SearchParams(
+            query_vector=make_normalized_vector(768),
+            tenant_id="tenant-123",
+            model="nomic-v1.5",
+            dimensions=768,
+            top_k=10,
+            min_score=None,
+            include_vectors=False,
+        )
+        await similarity_search(mock_db, params)
+
+        query = mock_db.fetch.call_args[0][0]
+        assert "as vector" not in query
+
+    @pytest.mark.asyncio
+    async def test_include_vectors_parses_pgvector_string(self):
+        """pgvector returns vectors as '[0.1,0.2,...]' strings; convert to list[float]."""
+        mock_db = AsyncMock()
+        mock_db.fetch = AsyncMock(return_value=[
+            {
+                "text_hash": "abc",
+                "original_text": "x",
+                "model": "nomic-v1.5",
+                "score": 0.9,
+                "hit_count": 1,
+                "vector": "[0.1,0.2,0.3]",
+            }
+        ])
+        mock_transaction = AsyncMock()
+        mock_transaction.__aenter__ = AsyncMock(return_value=mock_transaction)
+        mock_transaction.__aexit__ = AsyncMock(return_value=None)
+        mock_db.transaction = MagicMock(return_value=mock_transaction)
+
+        params = SearchParams(
+            query_vector=make_normalized_vector(768),
+            tenant_id="t",
+            model="nomic-v1.5",
+            dimensions=768,
+            top_k=10,
+            min_score=None,
+            include_vectors=True,
+        )
+        results = await similarity_search(mock_db, params)
+        assert results[0]["vector"] == pytest.approx([0.1, 0.2, 0.3])
+
 
 class TestVectorNormalization:
     def test_accepts_normalized_vector(self):

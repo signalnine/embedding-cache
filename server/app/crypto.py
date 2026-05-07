@@ -2,26 +2,34 @@
 import hashlib
 import secrets
 import base64
+from functools import lru_cache
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from app.config import settings
 
 
+@lru_cache(maxsize=1)
+def _get_fernet_cached(encryption_key: str) -> Fernet:
+    # PBKDF2 is the expensive step (100k iterations); cache the derived
+    # Fernet instance so it is computed once per encryption_key for the
+    # lifetime of the process. encryption_key is the cache key so a test
+    # that monkeypatches settings.encryption_key still gets a fresh Fernet.
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b"vec-embed-cache-salt",
+        iterations=100000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(encryption_key.encode()))
+    return Fernet(key)
+
+
 def _get_fernet() -> Fernet:
     """Get Fernet instance from encryption key."""
     if not settings.encryption_key:
         raise ValueError("ENCRYPTION_KEY not set")
-
-    # Derive a proper Fernet key from our secret
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=b"vec-embed-cache-salt",  # Fixed salt is OK for this use case
-        iterations=100000,
-    )
-    key = base64.urlsafe_b64encode(kdf.derive(settings.encryption_key.encode()))
-    return Fernet(key)
+    return _get_fernet_cached(settings.encryption_key)
 
 
 def encrypt_api_key(plaintext: str) -> str:

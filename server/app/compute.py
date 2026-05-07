@@ -37,32 +37,52 @@ def _get_model(model_name: str):
     return _model_cache[model_name]
 
 
-def compute_embedding_sync(text: str, model: str) -> list[float]:
-    """Compute embedding synchronously (runs in process pool)."""
+def _is_nomic_model(model: str) -> bool:
+    # nomic-embed models are the only ones that consume 'search_document:'
+    # / 'search_query:' style prefixes. Applying these prefixes to other
+    # encoders (e.g. all-MiniLM-L6-v2) embeds the literal prefix text and
+    # corrupts the vector.
+    name = model.lower()
+    return name.startswith("nomic-") or "nomic-embed" in name
+
+
+def _apply_prefix(text: str, model: str, role: str) -> str:
+    if not _is_nomic_model(model):
+        return text
+    if role == "query":
+        return f"search_query: {text}"
+    return f"search_document: {text}"
+
+
+def compute_embedding_sync(text: str, model: str, role: str = "document") -> list[float]:
+    """Compute embedding synchronously (runs in process pool).
+
+    role: 'document' for stored items, 'query' for retrieval queries.
+    Only affects nomic-* models; ignored for other encoders.
+    """
     model_instance = _get_model(model)
-    # nomic models expect 'search_query: ' or 'search_document: ' prefix
-    prefixed_text = f"search_document: {text}"
+    prefixed_text = _apply_prefix(text, model, role)
     embedding = model_instance.encode([prefixed_text])[0]
     return embedding.tolist()
 
 
-def compute_batch_sync(texts: list[str], model: str) -> list[list[float]]:
+def compute_batch_sync(texts: list[str], model: str, role: str = "document") -> list[list[float]]:
     """Compute batch embeddings synchronously."""
     model_instance = _get_model(model)
-    prefixed_texts = [f"search_document: {t}" for t in texts]
+    prefixed_texts = [_apply_prefix(t, model, role) for t in texts]
     embeddings = model_instance.encode(prefixed_texts)
     return [e.tolist() for e in embeddings]
 
 
-async def compute_embedding(text: str, model: str) -> list[float]:
+async def compute_embedding(text: str, model: str, role: str = "document") -> list[float]:
     """Compute embedding asynchronously using process pool."""
     loop = asyncio.get_event_loop()
     executor = _get_executor()
-    return await loop.run_in_executor(executor, compute_embedding_sync, text, model)
+    return await loop.run_in_executor(executor, compute_embedding_sync, text, model, role)
 
 
-async def compute_batch(texts: list[str], model: str) -> list[list[float]]:
+async def compute_batch(texts: list[str], model: str, role: str = "document") -> list[list[float]]:
     """Compute batch embeddings asynchronously."""
     loop = asyncio.get_event_loop()
     executor = _get_executor()
-    return await loop.run_in_executor(executor, compute_batch_sync, texts, model)
+    return await loop.run_in_executor(executor, compute_batch_sync, texts, model, role)

@@ -164,7 +164,8 @@ class TestSearchWithText:
         ]
 
         with patch("app.routes.search.compute_embedding", new_callable=AsyncMock) as mock_compute, \
-             patch("app.routes.search.similarity_search", new_callable=AsyncMock) as mock_search:
+             patch("app.routes.search.similarity_search", new_callable=AsyncMock) as mock_search, \
+             patch("app.routes.search.check_rate_limit", new_callable=AsyncMock):
             mock_compute.return_value = mock_embedding
             mock_search.return_value = mock_results
 
@@ -178,7 +179,7 @@ class TestSearchWithText:
             )
 
         assert response.status_code == 200
-        mock_compute.assert_called_once_with("find similar", "nomic-v1.5")
+        mock_compute.assert_called_once_with("find similar", "nomic-v1.5", role="query")
         data = response.json()
         assert len(data["results"]) == 1
 
@@ -295,3 +296,175 @@ class TestSearchAuthentication:
 
         # Without Authorization header, should fail
         assert response.status_code in [401, 422]
+
+
+class TestSearchTierAndRateLimit:
+    """Tier gating and rate limiting on /v1/search (bd: embedding-cache-0dx)."""
+
+    def test_query_text_paid_tier_charges_rate_limit(self, client):
+        """Paid tier with query_text must call check_rate_limit before computing."""
+        with patch("app.routes.search.compute_embedding", new_callable=AsyncMock) as mock_compute, \
+             patch("app.routes.search.similarity_search", new_callable=AsyncMock) as mock_search, \
+             patch("app.routes.search.check_rate_limit", new_callable=AsyncMock) as mock_rate:
+            mock_compute.return_value = [0.1] * 768
+            mock_search.return_value = []
+
+            response = client.post(
+                "/v1/search",
+                json={"query_text": "hello", "model": "nomic-v1.5"},
+                headers={"Authorization": "Bearer vec_test"},
+            )
+
+        assert response.status_code == 200
+        mock_rate.assert_awaited_once()
+        # tier='paid' should be passed
+        args, kwargs = mock_rate.call_args
+        assert "paid" in args or kwargs.get("tier") == "paid"
+
+    def test_query_vector_does_not_charge_rate_limit(self, client):
+        """Pre-computed query_vector means no compute, so no rate limit charge."""
+        with patch("app.routes.search.similarity_search", new_callable=AsyncMock) as mock_search, \
+             patch("app.routes.search.check_rate_limit", new_callable=AsyncMock) as mock_rate, \
+             patch("app.routes.search.compute_embedding", new_callable=AsyncMock) as mock_compute:
+            mock_search.return_value = []
+
+            response = client.post(
+                "/v1/search",
+                json={"query_vector": [0.1] * 768, "model": "nomic-v1.5"},
+                headers={"Authorization": "Bearer vec_test"},
+            )
+
+        assert response.status_code == 200
+        mock_rate.assert_not_awaited()
+        mock_compute.assert_not_awaited()
+
+    def test_free_tier_query_text_without_byok_rejected(self, mock_api_key):
+        """Free-tier user without BYOK provider cannot embed query_text."""
+        from app.main import app
+        from app.auth import get_current_api_key
+        from app.database import get_db
+
+        mock_api_key.tier = "free"
+        # db.query(Provider).filter(...).first() returns None
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        app.dependency_overrides[get_current_api_key] = lambda: mock_api_key
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        try:
+            with patch("app.routes.search.check_rate_limit", new_callable=AsyncMock):
+                client_local = TestClient(app)
+                response = client_local.post(
+                    "/v1/search",
+                    json={"query_text": "hello", "model": "nomic-v1.5"},
+                    headers={"Authorization": "Bearer vec_test"},
+                )
+        finally:
+            app.dependency_overrides.clear()
+
+        assert response.status_code == 400
+        assert "BYOK" in response.json()["detail"]
+
+    def test_free_tier_query_text_with_byok_uses_passthrough(self, mock_api_key):
+        """Free-tier with BYOK provider routes through call_byok_provider, not GPU."""
+        from app.main import app
+        from app.auth import get_current_api_key
+        from app.database import get_db
+
+        mock_api_key.tier = "free"
+        mock_provider = MagicMock()
+        mock_provider.endpoint = "https://api.openai.com/v1/embeddings"
+        mock_provider.api_key_encrypted = "enc"
+        mock_provider.request_template = {}
+        mock_provider.response_path = "$.data[0].embedding"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_provider
+
+        app.dependency_overrides[get_current_api_key] = lambda: mock_api_key
+        app.dependency_overrides[get_db] = lambda: mock_db
+
+        try:
+            with patch("app.routes.search.compute_embedding", new_callable=AsyncMock) as mock_compute, \
+                 patch("app.routes.search.call_byok_provider", new_callable=AsyncMock) as mock_byok, \
+                 patch("app.routes.search.similarity_search", new_callable=AsyncMock) as mock_search, \
+                 patch("app.routes.search.check_rate_limit", new_callable=AsyncMock):
+                mock_byok.return_value = [0.1] * 768
+                mock_search.return_value = []
+
+                client_local = TestClient(app)
+                response = client_local.post(
+                    "/v1/search",
+                    json={"query_text": "hello", "model": "nomic-v1.5"},
+                    headers={"Authorization": "Bearer vec_test"},
+                )
+        finally:
+            app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+        mock_byok.assert_awaited_once()
+        mock_compute.assert_not_awaited()
+
+
+class TestSearchIncludeVectors:
+    """Verify include_vectors plumbing (bd: embedding-cache-gff)."""
+
+    def test_include_vectors_returns_vector(self, client):
+        """When include_vectors=True, the response carries the vector list."""
+        mock_results = [
+            {
+                "text_hash": "abc123",
+                "original_text": "x",
+                "model": "nomic-v1.5",
+                "score": 0.85,
+                "hit_count": 1,
+                "vector": [0.5] * 768,
+            }
+        ]
+
+        with patch("app.routes.search.similarity_search", new_callable=AsyncMock) as mock_search:
+            mock_search.return_value = mock_results
+
+            response = client.post(
+                "/v1/search",
+                json={
+                    "query_vector": [0.1] * 768,
+                    "model": "nomic-v1.5",
+                    "include_vectors": True,
+                },
+                headers={"Authorization": "Bearer vec_test"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["results"][0]["vector"] == [0.5] * 768
+        # SearchParams should also carry the flag
+        params = mock_search.call_args.kwargs["params"]
+        assert params.include_vectors is True
+
+    def test_exclude_vectors_default(self, client):
+        """include_vectors defaults to False; vector field is None."""
+        mock_results = [
+            {
+                "text_hash": "abc123",
+                "original_text": "x",
+                "model": "nomic-v1.5",
+                "score": 0.85,
+                "hit_count": 1,
+            }
+        ]
+
+        with patch("app.routes.search.similarity_search", new_callable=AsyncMock) as mock_search:
+            mock_search.return_value = mock_results
+
+            response = client.post(
+                "/v1/search",
+                json={"query_vector": [0.1] * 768, "model": "nomic-v1.5"},
+                headers={"Authorization": "Bearer vec_test"},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["results"][0]["vector"] is None
+        params = mock_search.call_args.kwargs["params"]
+        assert params.include_vectors is False

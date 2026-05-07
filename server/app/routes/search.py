@@ -14,7 +14,9 @@ from app.similarity import (
 from app.auth import get_current_api_key
 from app.database import get_db
 from app.compute import compute_embedding
-from app.models import ApiKey
+from app.models import ApiKey, Provider
+from app.passthrough import call_byok_provider
+from app.rate_limit import check_rate_limit
 
 router = APIRouter(prefix="/v1", tags=["search"])
 
@@ -50,8 +52,46 @@ async def search_embeddings(
 
     # Get query vector
     if request.query_text is not None:
-        # Compute embedding from text
-        query_vector = await compute_embedding(request.query_text, request.model)
+        # Embedding the query consumes compute and must be tier-gated and
+        # rate-limited the same way /v1/embed is. Free tier falls back to BYOK.
+        await check_rate_limit(api_key.user_id, api_key.tier)
+
+        if api_key.tier == "paid":
+            query_vector = await compute_embedding(
+                request.query_text, request.model, role="query"
+            )
+        else:
+            provider = db.query(Provider).filter(
+                Provider.user_id == api_key.user_id
+            ).first()
+
+            if not provider:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Free tier requires a BYOK provider to embed query_text. "
+                        "Configure at POST /v1/provider, or pass a pre-computed "
+                        "query_vector instead."
+                    ),
+                )
+
+            query_vector = await call_byok_provider(
+                endpoint=provider.endpoint,
+                api_key_encrypted=provider.api_key_encrypted,
+                request_template=provider.request_template,
+                response_path=provider.response_path,
+                text=request.query_text,
+            )
+
+        if len(query_vector) != dimensions:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Computed query embedding has dimension {len(query_vector)}, "
+                    f"which does not match model {request.model} "
+                    f"(expected {dimensions})"
+                ),
+            )
     else:
         # Use provided vector
         query_vector = request.query_vector
@@ -70,6 +110,7 @@ async def search_embeddings(
         dimensions=dimensions,
         top_k=request.top_k,
         min_score=request.min_score,
+        include_vectors=request.include_vectors,
     )
 
     # Execute similarity search

@@ -105,3 +105,55 @@ def test_batch_over_limit_returns_429(client_with_overrides):
         )
 
     assert resp.status_code == 429
+
+
+# bd: embedding-cache-bsu -- BYOK users must not be able to publish to the
+# public namespace, since they fully control the vector returned by their
+# provider and could poison entries served to other tenants.
+
+@pytest.fixture
+def free_tier_client():
+    free_key = MagicMock(spec=ApiKey)
+    free_key.user_id = "usr_free"
+    free_key.tier = "free"
+    main_mod.app.dependency_overrides[get_current_api_key] = lambda: free_key
+    main_mod.app.dependency_overrides[get_db] = lambda: MagicMock()
+    yield TestClient(main_mod.app)
+    main_mod.app.dependency_overrides.clear()
+
+
+def test_embed_public_true_rejected_for_free_tier(free_tier_client):
+    """Free-tier (BYOK) cannot set public=True on /v1/embed."""
+    with patch("app.routes.embed.get_cached_embedding", return_value=None):
+        resp = free_tier_client.post(
+            "/v1/embed",
+            json={"text": "covid vaccine", "public": True},
+        )
+    assert resp.status_code == 403
+    assert "public" in resp.json()["detail"].lower()
+
+
+def test_embed_batch_public_true_rejected_for_free_tier(free_tier_client):
+    """Free-tier (BYOK) cannot set public=True on /v1/embed/batch."""
+    with patch("app.routes.embed.get_cached_embedding", return_value=None):
+        resp = free_tier_client.post(
+            "/v1/embed/batch",
+            json={"texts": ["a", "b"], "public": True},
+        )
+    assert resp.status_code == 403
+
+
+def test_embed_public_true_allowed_for_paid_tier(client_with_overrides):
+    """Paid tier (server-computed) may publish public=True."""
+    miss_vec = np.array([0.2] * 768, dtype=np.float32)
+    with patch("app.routes.embed.get_cached_embedding", return_value=None), \
+         patch("app.routes.embed.compute_embedding", new_callable=AsyncMock, return_value=miss_vec), \
+         patch("app.routes.embed.store_embedding") as mock_store, \
+         patch("app.routes.embed.check_rate_limit", new_callable=AsyncMock):
+        resp = client_with_overrides.post(
+            "/v1/embed",
+            json={"text": "something", "public": True},
+        )
+    assert resp.status_code == 200
+    # store_embedding should be called with public=True for paid tier
+    assert mock_store.call_args.kwargs.get("public") is True

@@ -26,6 +26,20 @@ async def embed(
     db: Session = Depends(get_db),
 ):
     """Get embedding for text."""
+    # public=True publishes the vector under tenant_id='public', from where
+    # other users read it. BYOK providers are user-controlled and could
+    # return arbitrary vectors, so only the trusted server-side compute path
+    # (paid tier) may write to the public namespace.
+    if request.public and api_key.tier != "paid":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "public=True is only allowed for paid-tier (server-computed) "
+                "embeddings. BYOK-computed vectors cannot be published to the "
+                "shared public cache."
+            ),
+        )
+
     # Check cache first so cached results don't consume rate budget.
     text_hash = generate_text_hash(request.text)
     cached = get_cached_embedding(
@@ -97,6 +111,17 @@ async def embed_batch(
         raise HTTPException(
             status_code=400,
             detail=f"Batch size exceeds limit of {settings.max_batch_size}"
+        )
+
+    # See /v1/embed: BYOK-tier requests cannot publish to the public cache.
+    if request.public and api_key.tier != "paid":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "public=True is only allowed for paid-tier (server-computed) "
+                "embeddings. BYOK-computed vectors cannot be published to the "
+                "shared public cache."
+            ),
         )
 
     embeddings = []
